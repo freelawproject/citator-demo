@@ -8,9 +8,45 @@
     <link rel="stylesheet" href="/assets/css/styles.css">
     <script defer src="/assets/js/alpine.min.js"></script>
   </head>
-  <body>
-    <main>
+  <body class="min-h-screen flex flex-col">
+
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <div class="alert-warning capped-width mx-4 md:mx-auto mt-4 mb-2" role="status">
+      <strong class="font-semibold">Preview build with placeholder data.</strong>
+      Real inference data lands the week of May 18. Treatments and validation indicators on this site are illustrative until then.
+    </div>
+
+    <header class="capped-width px-4 md:px-0 py-4 md:py-6 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <span class="font-cooper text-display-xs font-semibold text-greyscale-900">Citator</span>
+        <span class="hidden xs:inline text-xs text-greyscale-500">by Free Law Project</span>
+      </a>
+      <nav aria-label="Primary" class="flex items-center gap-6 text-sm">
+        <a href="/" class="text-greyscale-700 hover:text-primary-600">Search</a>
+        <a href="/about/" class="text-greyscale-700 hover:text-primary-600">About</a>
+      </nav>
+    </header>
+
+    <main id="main-content" class="capped-width px-4 md:px-0 py-6 flex-1">
       {{ content | safe }}
     </main>
+
+    <footer class="capped-width px-4 md:px-0 py-6 border-t border-greyscale-200 text-xs text-greyscale-500">
+      <div class="flex flex-wrap items-center gap-2">
+        <span>Generated {{ build.date }}</span>
+        <span aria-hidden="true">·</span>
+        <span>AI-powered citator preview</span>
+        <span aria-hidden="true">·</span>
+        <a href="/about/" class="links">About this citator</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://free.law/" class="links">Free Law Project</a>
+      </div>
+      <div class="mt-2">
+        <a href="#" class="links">Found something wrong? Help us improve →</a>
+        {# Real form URL wired in #11; placeholder anchor for now. #}
+      </div>
+    </footer>
+
   </body>
 </html>

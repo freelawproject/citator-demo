@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --content-max-width: 948px;
+    --content-max-width: 1200px;
   }
   body {
     @apply font-sans text-greyscale-900 bg-greyscale-25;
@@ -70,6 +70,45 @@
   }
   .skip-link {
     @apply transition-[opacity,transform] ease-in-out pointer-events-none focus-visible:pointer-events-auto top-0 left-0 bg-primary-600 text-white absolute p-2 m-2 -translate-y-24 focus-visible:translate-y-0 focus-visible:opacity-100 opacity-0 focus-visible:ring focus-visible:ring-primary-900 focus-visible:outline focus-visible:outline-primary-900 z-50;
+  }
+  .tooltip-target {
+    @apply relative inline-flex items-center justify-center;
+  }
+  .tooltip-target::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    left: auto;
+    padding: 6px 10px;
+    background: theme('colors.greyscale.900');
+    color: white;
+    font-size: 12px;
+    line-height: 16px;
+    white-space: pre-wrap;
+    max-width: 280px;
+    width: max-content;
+    text-align: left;
+    border-radius: 6px;
+    box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms ease;
+    z-index: 20;
+  }
+  .tooltip-target--right::after {
+    right: auto;
+    left: 100%;
+  }
+  .tooltip-target:hover::after,
+  .tooltip-target:focus-visible::after {
+    opacity: 1;
+  }
+  .tooltip-host:hover .rich-tooltip,
+  .tooltip-host:focus-visible .rich-tooltip,
+  .tooltip-host:focus-within .rich-tooltip {
+    opacity: 1;
+    visibility: visible;
   }
 }
 

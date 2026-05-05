@@ -322,11 +322,13 @@ def _summary_pointer(cb_row: dict) -> dict:
         "severity": cb_row["severity"],
         "citing_cluster_id": cb_row["citing_cluster_id"],
         "citing_case_name": cb_row["citing_case_name"],
+        "citing_citation": cb_row["citing_citation"],
         "citing_court": cb_row["citing_court"],
         "citing_court_display": cb_row["citing_court_display"],
         "citing_date_filed": cb_row["citing_date_filed"],
         "is_scoped": cb_row["is_scoped"],
         "validation": cb_row["validation"],
+        "expand": cb_row["expand"],
     }
 
 
@@ -352,7 +354,7 @@ def build_opinion(opinion: dict) -> dict:
     return {
         "cluster_id": opinion["cluster_id"],
         "case_name": opinion["case_name"],
-        "citation": opinion["citation"],
+        "citations": opinion["citations"],
         "court": opinion["court"],
         "court_display": COURT_DISPLAY.get(opinion["court"], opinion["court"]),
         "date_filed": opinion["date_filed"],
@@ -372,7 +374,7 @@ def build_index_entry(opinion_data: dict) -> dict:
     return {
         "cluster_id": opinion_data["cluster_id"],
         "case_name": opinion_data["case_name"],
-        "citation": opinion_data["citation"],
+        "citations": opinion_data["citations"],
         "court": opinion_data["court"],
         "court_display": opinion_data["court_display"],
         "date_filed": opinion_data["date_filed"],

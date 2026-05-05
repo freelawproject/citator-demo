@@ -108,7 +108,7 @@ MOCK_OPINIONS = [
     {
         "cluster_id": 110274,
         "case_name": "Walker v. Armco Steel Corp.",
-        "citation": "446 U.S. 740 (1980)",
+        "citations": ["446 U.S. 740", "100 S. Ct. 1978", "64 L. Ed. 2d 659"],
         "court": "scotus",
         "date_filed": "1980-06-02",
         "document_text": """## I
@@ -255,7 +255,7 @@ Accordingly, the judgment of the Court of Appeals is affirmed.""",
     {
         "cluster_id": 110360,
         "case_name": "Allen v. McCurry",
-        "citation": "449 U.S. 90 (1980)",
+        "citations": ["449 U.S. 90", "101 S. Ct. 411", "66 L. Ed. 2d 308"],
         "court": "scotus",
         "date_filed": "1980-12-09",
         "document_text": """## I
@@ -445,7 +445,7 @@ We hold that collateral estoppel applies in § 1983 actions where the state cour
     {
         "cluster_id": 4729777,
         "case_name": "Hernández v. Mesa",
-        "citation": "589 U.S. ___ (2020)",
+        "citations": ["589 U.S. ___", "140 S. Ct. 735", "206 L. Ed. 2d 29"],
         "court": "scotus",
         "date_filed": "2020-02-25",
         "document_text": """## I
@@ -592,7 +592,7 @@ We decline to extend Bivens to this new context. The judgment is affirmed.""",
     {
         "cluster_id": 117927,
         "case_name": "United States v. Lopez",
-        "citation": "514 U.S. 549 (1995)",
+        "citations": ["514 U.S. 549", "115 S. Ct. 1624", "131 L. Ed. 2d 626"],
         "court": "scotus",
         "date_filed": "1995-04-26",
         "document_text": """## I
@@ -821,7 +821,7 @@ We have identified three broad categories of activity that Congress may regulate
     {
         "cluster_id": 145643,
         "case_name": "Empire Healthchoice Assurance, Inc. v. McVeigh",
-        "citation": "547 U.S. 677 (2006)",
+        "citations": ["547 U.S. 677", "126 S. Ct. 2121", "165 L. Ed. 2d 131"],
         "court": "scotus",
         "date_filed": "2006-06-15",
         "document_text": """## I
@@ -942,7 +942,7 @@ Federal common law governs only in narrow circumstances. See <citedCase data-clu
                 "Clark v. Velsicol Chemical Corp.",
                 "944 F. Supp. 2d 215",
                 "dist",
-                "2013-05-08",
+                "2008-05-08",
                 "Reversed by",
                 "Empire forecloses the reasoning below",
                 "Court reversing.",
@@ -975,7 +975,7 @@ Federal common law governs only in narrow circumstances. See <citedCase data-clu
     {
         "cluster_id": 725046,
         "case_name": "United States v. Felix Garcia",
-        "citation": "97 F.3d 425 (2d Cir. 1996)",
+        "citations": ["97 F.3d 425"],
         "court": "ca2",
         "date_filed": "1996-09-23",
         "document_text": """## I
@@ -1076,7 +1076,7 @@ We have repeatedly held that the co-conspirator exception to the hearsay rule re
     {
         "cluster_id": 527778,
         "case_name": "In Re Stephen C. Perry",
-        "citation": "919 F.2d 962 (1st Cir. 1989)",
+        "citations": ["919 F.2d 962"],
         "court": "ca1",
         "date_filed": "1989-12-04",
         "document_text": """## I
@@ -1259,7 +1259,7 @@ The relevant statutory framework is found in 11 U.S.C. § 523. Prior decisions o
     {
         "cluster_id": 201580,
         "case_name": "Narragansett Indian v. State of Rhode Island",
-        "citation": "449 F.3d 16 (1st Cir. 2005)",
+        "citations": ["449 F.3d 16"],
         "court": "ca1",
         "date_filed": "2005-05-12",
         "document_text": """## I
@@ -1411,7 +1411,7 @@ The Indian Gaming Regulatory Act and tribal sovereignty principles inform the an
     {
         "cluster_id": 622781,
         "case_name": "Sanchez ex rel. DR-S. v. United States",
-        "citation": "671 F.3d 86 (1st Cir. 2012)",
+        "citations": ["671 F.3d 86"],
         "court": "ca1",
         "date_filed": "2012-01-04",
         "document_text": """## I
@@ -1541,7 +1541,7 @@ The discretionary function exception to the FTCA bars suits based on agency poli
     {
         "cluster_id": 1254,
         "case_name": "Chamberlin v. Town of Stoughton",
-        "citation": "601 F.3d 25 (1st Cir. 2010)",
+        "citations": ["601 F.3d 25"],
         "court": "ca1",
         "date_filed": "2010-04-01",
         "document_text": """## I

@@ -1,0 +1,106 @@
+---
+layout: layouts/base.njk
+pagination:
+  data: allOpinions
+  size: 1
+  alias: opinion
+permalink: "/opinion/{{ opinion.cluster_id }}/"
+scripts:
+  - /assets/js/alpine/components/opinion_tabs.js
+eleventyComputed:
+  title: "{{ opinion.case_name }}"
+---
+{% from "macros/treatment.njk" import treatmentBlock %}
+
+{% set tabs = [
+  {"id": "opinion", "label": "Opinion"},
+  {"id": "authorities", "label": "Authorities"},
+  {"id": "cited-by", "label": "Cited By"}
+] %}
+
+<article x-data="opinionTabs">
+  <header class="max-w-3xl">
+    <h1 class="font-cooper text-display-sm md:text-display-md font-semibold text-greyscale-900 leading-tight">
+      {{ opinion.case_name }}
+    </h1>
+    <dl class="mt-3 grid gap-y-1.5 text-sm">
+      <div class="flex flex-wrap gap-x-10 gap-y-1">
+        <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+          <dt class="text-xs uppercase tracking-wide font-semibold text-greyscale-500">Court</dt>
+          <dd class="text-greyscale-700">{{ opinion.court_display }}</dd>
+        </div>
+        <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+          <dt class="text-xs uppercase tracking-wide font-semibold text-greyscale-500">File Date</dt>
+          <dd class="text-greyscale-700">{{ opinion.date_filed }}</dd>
+        </div>
+      </div>
+      {% if opinion.citations %}
+      <div class="flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+        <dt class="text-xs uppercase tracking-wide font-semibold text-greyscale-500 flex-shrink-0">Citations</dt>
+        <dd class="text-greyscale-700">
+          {% for c in opinion.citations %}{{ c }}{% if not loop.last %} <span class="text-greyscale-400" aria-hidden="true">·</span> {% endif %}{% endfor %}
+        </dd>
+      </div>
+      {% endif %}
+    </dl>
+  </header>
+
+  <section aria-label="Treatment summary" class="mt-6">
+    {% set neg = opinion.summary.most_negative %}
+    {% set rec = opinion.summary.most_recent_negative %}
+    {% if neg and rec and neg.citing_cluster_id == rec.citing_cluster_id and neg.treatment == rec.treatment %}
+      {{ treatmentBlock(neg, "Most negative & most recent") }}
+    {% elif neg or rec %}
+      <div class="grid gap-4 md:grid-cols-2">
+        {% if neg %}{{ treatmentBlock(neg, "Most negative") }}{% endif %}
+        {% if rec %}{{ treatmentBlock(rec, "Most recent negative") }}{% endif %}
+      </div>
+    {% else %}
+      <p class="bg-white rounded-2xl border border-greyscale-200 px-4 py-3 text-sm text-greyscale-600">No negative inbound treatments recorded.</p>
+    {% endif %}
+  </section>
+
+  <div
+    class="mt-8 border-b border-greyscale-200 flex gap-2"
+    role="tablist"
+    aria-label="Opinion sections"
+  >
+    {% for tab in tabs %}
+    <button
+      type="button"
+      role="tab"
+      id="tab-{{ tab.id }}"
+      aria-controls="panel-{{ tab.id }}"
+      x-bind:aria-selected="activeTab === '{{ tab.id }}' ? 'true' : 'false'"
+      x-bind:tabindex="activeTab === '{{ tab.id }}' ? 0 : -1"
+      x-bind:class="activeTab === '{{ tab.id }}' ? 'border-primary-600 text-primary-700' : 'border-transparent text-greyscale-600 hover:text-greyscale-900 hover:border-greyscale-300'"
+      class="px-4 py-2.5 -mb-px border-b-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 focus-visible:rounded-t"
+      x-on:click="setTab('{{ tab.id }}')"
+      x-on:keydown="onKeydown($event)"
+    >
+      {{ tab.label }}
+    </button>
+    {% endfor %}
+  </div>
+
+  <div class="mt-6">
+    {% for tab in tabs %}
+    <section
+      role="tabpanel"
+      id="panel-{{ tab.id }}"
+      aria-labelledby="tab-{{ tab.id }}"
+      x-show="activeTab === '{{ tab.id }}'"
+      x-cloak
+      tabindex="0"
+    >
+      {% if tab.id == "opinion" %}
+        <div class="opinion-body max-w-3xl">
+          {{ opinion.document.body_html | safe }}
+        </div>
+      {% else %}
+        <p class="text-sm text-greyscale-500 italic">{{ tab.label }} content — coming soon.</p>
+      {% endif %}
+    </section>
+    {% endfor %}
+  </div>
+</article>

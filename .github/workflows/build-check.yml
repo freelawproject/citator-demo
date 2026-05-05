@@ -1,0 +1,33 @@
+name: Build check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Run full build
+        run: npm run build
+
+      - name: Verify _site/ output exists
+        run: test -f _site/index.html && test -f _site/assets/css/styles.css

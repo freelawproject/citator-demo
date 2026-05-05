@@ -78,11 +78,18 @@ def direction_for(treatment: str) -> str:
     in the mock we infer from the treatment label."""
     if "as recognized by" in treatment:
         return "Related Reference"
-    if treatment in {"Reversed by", "Reversed and remanded by",
-                     "Vacated by", "Vacated and remanded by",
-                     "Affirmed by", "Affirmed in part; Reversed in part by",
-                     "Affirmed in part; Vacated in part by",
-                     "Cert. denied by", "Cert. granted by", "Remanded by"}:
+    if treatment in {
+        "Reversed by",
+        "Reversed and remanded by",
+        "Vacated by",
+        "Vacated and remanded by",
+        "Affirmed by",
+        "Affirmed in part; Reversed in part by",
+        "Affirmed in part; Vacated in part by",
+        "Cert. denied by",
+        "Cert. granted by",
+        "Remanded by",
+    }:
         return "Direct History"
     return "Citing Reference"
 
@@ -120,7 +127,11 @@ def render_body_html(document_text: str) -> tuple[str, list[dict]]:
     section_pairs = list(zip(parts[1::2], parts[2::2], strict=False))
 
     sections_meta = [
-        {"id": sid.strip(), "title": sid.strip(), "anchor": section_anchor(sid.strip())}
+        {
+            "id": sid.strip(),
+            "title": sid.strip(),
+            "anchor": section_anchor(sid.strip()),
+        }
         for sid, _ in section_pairs
     ]
 
@@ -132,9 +143,9 @@ def render_body_html(document_text: str) -> tuple[str, list[dict]]:
         anchor = section_anchor(sid_clean)
         out_chunks.append(
             f'<section id="{anchor}" data-section-id="{escape(sid_clean)}">'
-            f'<h2>{escape(sid_clean)}</h2>'
-            f'{_render_paragraphs(body)}'
-            f'</section>'
+            f"<h2>{escape(sid_clean)}</h2>"
+            f"{_render_paragraphs(body)}"
+            f"</section>"
         )
     return "\n".join(out_chunks), sections_meta
 
@@ -151,7 +162,7 @@ def _render_paragraphs(text: str) -> str:
         out = []
         last = 0
         for m in CITED_CASE_RE.finditer(p):
-            out.append(escape(p[last:m.start()]))
+            out.append(escape(p[last : m.start()]))
             cluster_id = int(m.group(1))
             label = m.group(2)
             if cluster_id in SCOPED_CLUSTER_IDS:
@@ -160,9 +171,7 @@ def _render_paragraphs(text: str) -> str:
                     f'href="/opinion/{cluster_id}/">{escape(label)}</a>'
                 )
             else:
-                out.append(
-                    f'<span class="cited-case">{escape(label)}</span>'
-                )
+                out.append(f'<span class="cited-case">{escape(label)}</span>')
             last = m.end()
         out.append(escape(p[last:]))
         rendered.append(f"<p>{''.join(out)}</p>")
@@ -183,7 +192,9 @@ def transform_authority(row: dict, idx: int) -> dict:
         "severity": severity,
         "direction": direction_for(treatment),
         "section_id": row["section_id"],
-        "section_anchor": section_anchor(row["section_id"]) if row["section_id"] else "",
+        "section_anchor": section_anchor(row["section_id"])
+        if row["section_id"]
+        else "",
         "validation": {
             "state": row["validation_state"],
             "expert_treatment": row["expert_treatment"],
@@ -204,7 +215,9 @@ def transform_cited_by(row: dict, idx: int) -> dict:
         "citing_case_name": row["citing_case_name"],
         "citing_citation": row["citing_citation"],
         "citing_court": row["citing_court"],
-        "citing_court_display": COURT_DISPLAY.get(row["citing_court"], row["citing_court"]),
+        "citing_court_display": COURT_DISPLAY.get(
+            row["citing_court"], row["citing_court"]
+        ),
         "citing_date_filed": row["citing_date_filed"],
         "is_scoped": row["citing_cluster_id"] in SCOPED_CLUSTER_IDS,
         "treatment": treatment,
@@ -221,8 +234,11 @@ def transform_cited_by(row: dict, idx: int) -> dict:
     }
 
 
-def sort_by_severity_then_date(rows: list[dict], date_key: str | None) -> list[dict]:
+def sort_by_severity_then_date(
+    rows: list[dict], date_key: str | None
+) -> list[dict]:
     """Sort by severity tier (Stop first), then by date (newest first) if available."""
+
     def key(r: dict):
         sev_rank = SEVERITY_RANK.get(r["severity"], 99)
         if date_key and r.get(date_key):
@@ -232,14 +248,21 @@ def sort_by_severity_then_date(rows: list[dict], date_key: str | None) -> list[d
 
     # For descending date within tier, sort once with negative key —
     # easier: sort by sev ascending, then by date descending in a stable second pass.
-    rows = sorted(rows, key=lambda r: r.get(date_key, "") if date_key else "", reverse=True)
+    rows = sorted(
+        rows,
+        key=lambda r: r.get(date_key, "") if date_key else "",
+        reverse=True,
+    )
     rows = sorted(rows, key=lambda r: SEVERITY_RANK.get(r["severity"], 99))
     return rows
 
 
 def build_summary(cited_by_sorted: list[dict]) -> dict:
     """Compute most-negative + most-recent-negative + tier counts from cited_by."""
-    counts = {tier.lower(): 0 for tier in ("Stop", "Warning", "Caution", "Neutral", "Related")}
+    counts = {
+        tier.lower(): 0
+        for tier in ("Stop", "Warning", "Caution", "Neutral", "Related")
+    }
     for cb in cited_by_sorted:
         tier_key = cb["severity"].lower()
         if tier_key in counts:
@@ -254,7 +277,9 @@ def build_summary(cited_by_sorted: list[dict]) -> dict:
             break
 
     # Most-recent-negative: of all negative-tier rows, the latest by date
-    negative_rows = [cb for cb in cited_by_sorted if cb["severity"] in NEGATIVE_TIERS]
+    negative_rows = [
+        cb for cb in cited_by_sorted if cb["severity"] in NEGATIVE_TIERS
+    ]
     most_recent = None
     if negative_rows:
         latest = max(negative_rows, key=lambda r: r["citing_date_filed"])
@@ -292,10 +317,11 @@ def build_opinion(opinion: dict) -> dict:
     authorities = sort_by_severity_then_date(authorities, date_key=None)
 
     cited_by = [
-        transform_cited_by(row, i)
-        for i, row in enumerate(opinion["cited_by"])
+        transform_cited_by(row, i) for i, row in enumerate(opinion["cited_by"])
     ]
-    cited_by = sort_by_severity_then_date(cited_by, date_key="citing_date_filed")
+    cited_by = sort_by_severity_then_date(
+        cited_by, date_key="citing_date_filed"
+    )
 
     summary = build_summary(cited_by)
 
@@ -343,10 +369,14 @@ def main() -> None:
     index_entries.sort(key=lambda e: e["case_name"].lower())
 
     index_path = OUT_DIR / "index.json"
-    index_path.write_text(json.dumps(index_entries, indent=2, ensure_ascii=False))
+    index_path.write_text(
+        json.dumps(index_entries, indent=2, ensure_ascii=False)
+    )
 
     print(f"Wrote {len(MOCK_OPINIONS)} opinion JSONs to {OPINIONS_OUT}")
-    print(f"Wrote index.json with {len(index_entries)} entries to {index_path}")
+    print(
+        f"Wrote index.json with {len(index_entries)} entries to {index_path}"
+    )
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
+    <meta name="description" content="An AI-powered citator preview from Free Law Project. Surfaces how each opinion treats its cited cases and how subsequent opinions have treated it.">
     <title>{{ title or "Citator Demo" }} — Free Law Project</title>
     <link rel="stylesheet" href="/assets/css/styles.css">
     <script defer src="/assets/js/alpine.min.js"></script>
@@ -11,42 +12,51 @@
   <body class="min-h-screen flex flex-col">
 
     <a href="#main-content" class="skip-link">Skip to main content</a>
+    <a href="#footer" class="skip-link">Skip to footer</a>
 
-    <div class="alert-warning capped-width mx-4 md:mx-auto mt-4 mb-2" role="status">
-      <strong class="font-semibold">Preview build with placeholder data.</strong>
-      Real inference data lands the week of May 18. Treatments and validation indicators on this site are illustrative until then.
-    </div>
+    {% if build.placeholder_until %}
+      <div class="alert-warning capped-width mx-4 md:mx-auto mt-4 mb-2">
+        <strong class="font-semibold">Preview build with placeholder data.</strong>
+        Real inference data lands the week of {{ build.placeholder_until }}. Treatments and validation indicators on this site are illustrative until then.
+      </div>
+    {% endif %}
 
-    <header class="capped-width px-4 md:px-0 py-4 md:py-6 flex items-center justify-between">
-      <a href="/" class="flex items-center gap-3">
-        <span class="font-cooper text-display-xs font-semibold text-greyscale-900">Citator</span>
-        <span class="hidden xs:inline text-xs text-greyscale-500">by Free Law Project</span>
-      </a>
-      <nav aria-label="Primary" class="flex items-center gap-6 text-sm">
-        <a href="/" class="text-greyscale-700 hover:text-primary-600">Search</a>
-        <a href="/about/" class="text-greyscale-700 hover:text-primary-600">About</a>
-      </nav>
+    <header class="w-full px-4 lg:px-10 py-3 md:py-4">
+      <div class="capped-width flex items-center justify-between gap-4">
+        <a href="/" class="flex items-center gap-3" aria-label="Go to homepage">
+          <span class="font-cooper text-display-xs font-semibold text-greyscale-900">Citator</span>
+          <span class="hidden xs:inline text-xs text-greyscale-500">by Free Law Project</span>
+        </a>
+        <nav aria-label="Primary" class="flex items-center gap-6 text-sm">
+          <a href="/" class="text-greyscale-700 hover:text-primary-600">Search</a>
+          <a href="/about/" class="text-greyscale-700 hover:text-primary-600">About</a>
+        </nav>
+      </div>
     </header>
 
-    <main id="main-content" class="capped-width px-4 md:px-0 py-6 flex-1">
+    <main id="main-content" class="capped-width px-4 md:px-10 py-6 flex-1">
       {{ content | safe }}
     </main>
 
-    <footer class="capped-width px-4 md:px-0 py-6 border-t border-greyscale-200 text-xs text-greyscale-500">
-      <div class="flex flex-wrap items-center gap-2">
-        <span>Generated {{ build.date }}</span>
-        <span aria-hidden="true">·</span>
-        <span>AI-powered citator preview</span>
-        <span aria-hidden="true">·</span>
-        <a href="/about/" class="links">About this citator</a>
-        <span aria-hidden="true">·</span>
-        <a href="https://free.law/" class="links">Free Law Project</a>
-      </div>
-      <div class="mt-2">
-        <a href="#" class="links">Found something wrong? Help us improve →</a>
-        {# Real form URL wired in #11; placeholder anchor for now. #}
-      </div>
-    </footer>
+    <div class="w-full border-t border-greyscale-200">
+      <footer id="footer" class="capped-width px-4 md:px-10 py-6 text-xs text-greyscale-500">
+        <div class="flex flex-wrap items-center gap-2">
+          <span>Generated {{ build.date }}</span>
+          <span aria-hidden="true">·</span>
+          <span>AI-powered citator preview</span>
+          <span aria-hidden="true">·</span>
+          <a href="/about/" class="links">About this citator</a>
+          <span aria-hidden="true">·</span>
+          <a
+            href="https://free.law/"
+            class="links"
+            target="_blank"
+            rel="noopener"
+          >Free Law Project</a>
+        </div>
+        {# "Found something wrong?" link wired in #11 (Google Form URL). #}
+      </footer>
+    </div>
 
   </body>
 </html>

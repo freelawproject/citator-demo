@@ -1,3 +1,82 @@
+@import "fonts.css";
+
 @tailwind base;
+
+@layer base {
+  :root {
+    --content-max-width: 948px;
+  }
+  body {
+    @apply font-sans text-greyscale-900 bg-greyscale-25;
+  }
+  h1 {
+    @apply font-cooper text-display-sm font-semibold md:text-display-lg;
+  }
+  h2 {
+    @apply text-display-xs font-semibold text-greyscale-900;
+  }
+  h3 {
+    @apply text-xl font-semibold text-greyscale-900;
+  }
+  h4 {
+    @apply text-lg font-semibold text-greyscale-900;
+  }
+  ul {
+    @apply list-disc pl-6;
+  }
+  ol {
+    @apply list-decimal pl-6;
+  }
+  table {
+    @apply table;
+  }
+  tr {
+    @apply has-[th[scope="col"]]:bg-greyscale-100 w-full border-b border-greyscale-200 text-sm font-normal;
+  }
+  th {
+    @apply p-2 text-start text-greyscale-700 font-normal;
+  }
+  td {
+    @apply p-2;
+  }
+  [x-cloak] {
+    display: none !important;
+  }
+}
+
 @tailwind components;
+
+@layer components {
+  .alert {
+    @apply px-4 py-3 text-sm rounded-[10px] border;
+  }
+  .alert-warning {
+    @apply alert text-greyscale-950 bg-yellow-50 border-amber-450 border-2 rounded-2xl;
+  }
+  .btn {
+    @apply py-2.5 px-3.5 rounded-lg w-fit text-sm font-normal flex gap-1 items-center;
+  }
+  .btn-primary {
+    @apply btn text-white bg-primary-600 hover:bg-primary-700 outline-none focus-visible:ring-4 focus-visible:ring-primary-300;
+  }
+  .btn-outline {
+    @apply btn bg-white text-greyscale-700 hover:bg-greyscale-400 hover:text-white border border-greyscale-300 focus-visible:ring-4 focus-visible:ring-greyscale-300;
+  }
+  .btn-ghost {
+    @apply btn hover:bg-greyscale-100 focus-visible:ring-4 focus-visible:ring-greyscale-200;
+  }
+  .links {
+    @apply underline text-primary-600 hover:text-primary-800;
+  }
+  .skip-link {
+    @apply transition-[opacity,transform] ease-in-out pointer-events-none focus-visible:pointer-events-auto top-0 left-0 bg-primary-600 text-white absolute p-2 m-2 -translate-y-24 focus-visible:translate-y-0 focus-visible:opacity-100 opacity-0 focus-visible:ring focus-visible:ring-primary-900 focus-visible:outline focus-visible:outline-primary-900 z-50;
+  }
+}
+
 @tailwind utilities;
+
+@layer utilities {
+  .capped-width {
+    @apply w-full max-w-[--content-max-width] mx-auto;
+  }
+}

@@ -11,6 +11,7 @@
 module.exports = function (eleventyConfig) {
   // Pass-through copy: assets and bundled JS go straight to _site/.
   eleventyConfig.addPassthroughCopy("assets/js");
+  eleventyConfig.addPassthroughCopy("assets/fonts");
   eleventyConfig.addPassthroughCopy({ "node_modules/alpinejs/dist/cdn.min.js": "assets/js/alpine.min.js" });
 
   return {

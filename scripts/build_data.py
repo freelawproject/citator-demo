@@ -101,6 +101,23 @@ CITED_CASE_RE = re.compile(
 )
 
 
+def excerpt_from_text(document_text: str, max_chars: int = 280) -> str:
+    """First-paragraph plain-text excerpt for the search results card."""
+    text = SECTION_RE.sub("", document_text)
+    text = CITED_CASE_RE.sub(r"\2", text)
+    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+    if not paragraphs:
+        return ""
+    first = paragraphs[0]
+    if len(first) <= max_chars:
+        return first
+    truncated = first[:max_chars]
+    cut = truncated.rfind(". ")
+    if cut > max_chars * 0.6:
+        return truncated[: cut + 1]
+    return truncated.rstrip() + "…"
+
+
 def section_anchor(section_id: str) -> str:
     """Turn a section ID like 'II.A' into a URL-safe anchor 'section-II-A'."""
     safe = re.sub(r"[^A-Za-z0-9]+", "-", section_id).strip("-")
@@ -285,9 +302,15 @@ def build_summary(cited_by_sorted: list[dict]) -> dict:
         latest = max(negative_rows, key=lambda r: r["citing_date_filed"])
         most_recent = _summary_pointer(latest)
 
+    headline = most_negative
+    if headline is None and cited_by_sorted:
+        latest = max(cited_by_sorted, key=lambda r: r["citing_date_filed"])
+        headline = _summary_pointer(latest)
+
     return {
         "most_negative": most_negative,
         "most_recent_negative": most_recent,
+        "headline": headline,
         "counts": counts,
     }
 
@@ -303,6 +326,7 @@ def _summary_pointer(cb_row: dict) -> dict:
         "citing_court_display": cb_row["citing_court_display"],
         "citing_date_filed": cb_row["citing_date_filed"],
         "is_scoped": cb_row["is_scoped"],
+        "validation": cb_row["validation"],
     }
 
 
@@ -332,6 +356,7 @@ def build_opinion(opinion: dict) -> dict:
         "court": opinion["court"],
         "court_display": COURT_DISPLAY.get(opinion["court"], opinion["court"]),
         "date_filed": opinion["date_filed"],
+        "excerpt": excerpt_from_text(opinion["document_text"]),
         "summary": summary,
         "document": {
             "body_html": body_html,
@@ -351,6 +376,7 @@ def build_index_entry(opinion_data: dict) -> dict:
         "court": opinion_data["court"],
         "court_display": opinion_data["court_display"],
         "date_filed": opinion_data["date_filed"],
+        "excerpt": opinion_data["excerpt"],
         "summary": opinion_data["summary"],
     }
 

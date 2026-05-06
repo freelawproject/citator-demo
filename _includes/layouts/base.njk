@@ -27,13 +27,18 @@
       </div>
     {% endif %}
 
+    {% if page.url != "/" %}
     <header class="w-full px-4 md:px-10 py-3">
       <div class="capped-width">
-        <a href="/" class="inline-flex items-center font-cooper text-lg font-semibold text-primary-600 hover:text-primary-700" aria-label="Citator home">
-          Citator
+        <a href="/" class="inline-flex items-center gap-1.5 text-sm text-greyscale-700 hover:text-primary-600">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+          </svg>
+          Back to home
         </a>
       </div>
     </header>
+    {% endif %}
 
     <main id="main-content" class="capped-width px-4 md:px-10 py-6 flex-1">
       {{ content | safe }}

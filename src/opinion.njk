@@ -7,10 +7,11 @@ pagination:
 permalink: "/opinion/{{ opinion.cluster_id }}/"
 scripts:
   - /assets/js/alpine/components/opinion_tabs.js
+  - /assets/js/alpine/components/authorities_filter.js
 eleventyComputed:
   title: "{{ opinion.case_name }}"
 ---
-{% from "macros/treatment.njk" import treatmentBlock %}
+{% from "macros/treatment.njk" import treatmentBlock, severityBadge, validationDot %}
 
 {% set tabs = [
   {"id": "opinion", "label": "Opinion"},
@@ -97,6 +98,8 @@ eleventyComputed:
         <div class="opinion-body max-w-3xl">
           {{ opinion.document.body_html | safe }}
         </div>
+      {% elif tab.id == "authorities" %}
+        {% include "partials/authorities-tab.njk" %}
       {% else %}
         <p class="text-sm text-greyscale-500 italic">{{ tab.label }} content — coming soon.</p>
       {% endif %}

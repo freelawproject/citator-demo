@@ -195,8 +195,77 @@ def _render_paragraphs(text: str) -> str:
     return "\n".join(rendered)
 
 
+# ── Quote-in-context lookup ────────────────────────────────────────────
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def find_quote_context(
+    document_text: str, quote: str, n_sentences: int = 3
+) -> dict:
+    """Locate `quote` inside the opinion body and return the N sentences
+    before and after it. Used to render the supporting-quote highlight on
+    the Authorities tab in document context."""
+    plain = CITED_CASE_RE.sub(r"\2", document_text)
+    plain = SECTION_RE.sub("", plain)
+    plain = re.sub(r"\s+", " ", plain).strip()
+
+    idx = plain.lower().find(quote.lower())
+    if idx < 0:
+        return {"before": "", "quote": quote, "after": ""}
+
+    quote_actual = plain[idx : idx + len(quote)]
+    before_text = plain[:idx].strip()
+    after_text = plain[idx + len(quote) :].strip()
+
+    before_sentences = [s for s in SENTENCE_SPLIT_RE.split(before_text) if s]
+    after_sentences = [s for s in SENTENCE_SPLIT_RE.split(after_text) if s]
+
+    return {
+        "before": " ".join(before_sentences[-n_sentences:]),
+        "quote": quote_actual,
+        "after": " ".join(after_sentences[:n_sentences]),
+    }
+
+
+# ── Active-voice rewriting (for the Authorities tab) ───────────────────
+# The canonical treatments are passive ("Overruled by"). Authorities views
+# show what *this* opinion did to its cited cases, so the verb flips to
+# active voice ("Overrules"). Cited By keeps the passive form unchanged.
+ACTIVE_VOICE = {
+    "Reversed by": "Reverses",
+    "Reversed and remanded by": "Reverses and remands",
+    "Vacated by": "Vacates",
+    "Vacated and remanded by": "Vacates and remands",
+    "Overruled by": "Overrules",
+    "Abrogated by": "Abrogates",
+    "Questioned by": "Questions",
+    "Affirmed in part; Reversed in part by": "Affirms in part; Reverses in part",
+    "Affirmed in part; Vacated in part by": "Affirms in part; Vacates in part",
+    "Disapproved by": "Disapproves",
+    "Limited by": "Limits",
+    "Remanded by": "Remands",
+    "Cert. granted by": "Granted cert.",
+    "Criticized by": "Criticizes",
+    "Distinguished by": "Distinguishes",
+    "Declined to follow by": "Declines to follow",
+    "Dismissed by": "Dismisses",
+    "Affirmed by": "Affirms",
+    "Cert. denied by": "Denied cert.",
+    "Cited by": "Cites",
+}
+
+
+def to_active_voice(treatment: str) -> str:
+    if treatment in ACTIVE_VOICE:
+        return ACTIVE_VOICE[treatment]
+    # "Overruled as recognized by" → "Overruled as recognized"
+    if treatment.endswith(" by"):
+        return treatment[:-3]
+    return treatment
+
+
 # ── Authority + Cited By transformation ────────────────────────────────
-def transform_authority(row: dict, idx: int) -> dict:
+def transform_authority(row: dict, idx: int, document_text: str) -> dict:
     treatment = row["treatment"]
     severity = severity_for(treatment)
     return {
@@ -206,6 +275,7 @@ def transform_authority(row: dict, idx: int) -> dict:
         "cited_citation": row["cited_citation"],
         "is_scoped": row["cited_cluster_id"] in SCOPED_CLUSTER_IDS,
         "treatment": treatment,
+        "treatment_active": to_active_voice(treatment),
         "severity": severity,
         "direction": direction_for(treatment),
         "section_id": row["section_id"],
@@ -219,6 +289,7 @@ def transform_authority(row: dict, idx: int) -> dict:
         "expand": {
             "quote": row["quote"],
             "rationale": row["rationale"],
+            "context": find_quote_context(document_text, row["quote"]),
         },
     }
 
@@ -337,7 +408,7 @@ def build_opinion(opinion: dict) -> dict:
     body_html, sections = render_body_html(opinion["document_text"])
 
     authorities = [
-        transform_authority(row, i)
+        transform_authority(row, i, opinion["document_text"])
         for i, row in enumerate(opinion["authorities"])
     ]
     authorities = sort_by_severity_then_date(authorities, date_key=None)

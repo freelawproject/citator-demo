@@ -111,7 +111,25 @@
     visibility: visible;
   }
   .opinion-body section {
-    @apply mb-6;
+    @apply mb-6 rounded-lg;
+  }
+  .opinion-body section.section-flash {
+    animation: quote-flash-fade 1.8s ease-out;
+  }
+  .opinion-body p.quote-flash {
+    animation: quote-flash-fade 1.8s ease-out;
+  }
+  @keyframes quote-flash-fade {
+    0%, 25% {
+      background-color: rgb(254 240 138 / 0.6);
+      box-shadow: 0 0 0 6px rgb(254 240 138 / 0.6);
+      border-radius: 6px;
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: 0 0 0 6px transparent;
+      border-radius: 6px;
+    }
   }
   .opinion-body section h2 {
     @apply sr-only;
@@ -132,6 +150,15 @@
     display: none;
   }
   .treatment-expand[open] > summary .expand-chevron {
+    transform: rotate(90deg);
+  }
+  .authority-row > summary {
+    list-style: none;
+  }
+  .authority-row > summary::-webkit-details-marker {
+    display: none;
+  }
+  .authority-row[open] > summary .expand-chevron {
     transform: rotate(90deg);
   }
 }

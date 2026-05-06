@@ -8,6 +8,7 @@ permalink: "/opinion/{{ opinion.cluster_id }}/"
 scripts:
   - /assets/js/alpine/components/opinion_tabs.js
   - /assets/js/alpine/components/authorities_filter.js
+  - /assets/js/alpine/components/cited_by_filter.js
 eleventyComputed:
   title: "{{ opinion.case_name }}"
 ---
@@ -100,8 +101,8 @@ eleventyComputed:
         </div>
       {% elif tab.id == "authorities" %}
         {% include "partials/authorities-tab.njk" %}
-      {% else %}
-        <p class="text-sm text-greyscale-500 italic">{{ tab.label }} content — coming soon.</p>
+      {% elif tab.id == "cited-by" %}
+        {% include "partials/cited-by-tab.njk" %}
       {% endif %}
     </section>
     {% endfor %}

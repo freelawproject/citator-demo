@@ -294,7 +294,33 @@ def transform_authority(row: dict, idx: int, document_text: str) -> dict:
     }
 
 
-def transform_cited_by(row: dict, idx: int) -> dict:
+def cb_context(row: dict, cited_case_name: str) -> dict:
+    """Build the supporting-quote context for a cited_by row.
+
+    If the row provides a real `body_excerpt` containing the quote, slice
+    context out of it via `find_quote_context`. Otherwise synthesize a short
+    generic frame so every row shows the quote in *some* surrounding text.
+
+    The synthesized version is mock-only; the real-data swap (#13) will
+    supply each citing opinion's body and produce real context.
+    """
+    quote = row["quote"]
+    excerpt = row.get("body_excerpt")
+    if excerpt and quote.lower() in excerpt.lower():
+        return find_quote_context(excerpt, quote)
+    return {
+        "before": (
+            "After reviewing the briefing and the relevant authorities, "
+            "the court reasoned that"
+        ),
+        "quote": quote,
+        "after": "and on that basis resolved the question before it.",
+    }
+
+
+def transform_cited_by(
+    row: dict, idx: int, cited_case_name: str
+) -> dict:
     treatment = row["treatment"]
     severity = severity_for(treatment)
     return {
@@ -318,6 +344,7 @@ def transform_cited_by(row: dict, idx: int) -> dict:
         "expand": {
             "quote": row["quote"],
             "rationale": row["rationale"],
+            "context": cb_context(row, cited_case_name),
         },
     }
 
@@ -414,11 +441,19 @@ def build_opinion(opinion: dict) -> dict:
     authorities = sort_by_severity_then_date(authorities, date_key=None)
 
     cited_by = [
-        transform_cited_by(row, i) for i, row in enumerate(opinion["cited_by"])
+        transform_cited_by(row, i, opinion["case_name"])
+        for i, row in enumerate(opinion["cited_by"])
     ]
     cited_by = sort_by_severity_then_date(
         cited_by, date_key="citing_date_filed"
     )
+    # Rank each row by citing_date_filed desc so the Cited By tab's
+    # "Recency" sort can reorder via CSS `order:` without re-sorting in JS.
+    by_date_desc = sorted(
+        cited_by, key=lambda r: r["citing_date_filed"], reverse=True
+    )
+    for rank, row in enumerate(by_date_desc):
+        row["recency_index"] = rank
 
     summary = build_summary(cited_by)
 

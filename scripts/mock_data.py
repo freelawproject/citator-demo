@@ -1,16 +1,18 @@
 """Hand-written mock fixtures for the demo site, used until real inference
 data lands (issue #13).
 
-Uses the 10 real cluster IDs + case names from
-ai-research/experiments_05012026/ so the real-data swap is "replace this
-module's MOCK_OPINIONS with a function that reads CSVs from data-source/."
+The 10 scoped opinions form a coherent qualified-immunity / §1983 cluster
+(SCOTUS Pearson/Saucier/Harlow + lower-court applications). Real cluster IDs
+and real opinion paragraphs (extracted from CourtListener) are used for 9 of
+the 10; the 10th is a fabricated D. Utah district-court opinion to demonstrate
+Path-B (heavily-cited) scope.
 
-Treatments and validation states are fabricated to exercise every UX state.
-
-Cross-references intentionally seeded:
-- Hernández v. Mesa (4729777, 2020)   cites    Allen v. McCurry (110360)
-- Sanchez ex rel. DR-S. (622781)      cites    Allen v. McCurry (110360)
-- Allen v. McCurry (110360)            cited by Hernández + Sanchez
+Data shape mirrors the production citator schema documented in
+ai-research/citator_launch_plan/db_design.md. Each treatment relationship is
+authored once on the citing side; build_data.py derives the cited side's
+view (no double-authoring, no drift). External (non-scoped) citing-case
+metadata lives in EXTERNAL_OPINIONS so build_data.py can populate cited_by
+views for those edges too.
 """
 
 from __future__ import annotations
@@ -18,16 +20,16 @@ from __future__ import annotations
 # ── Scoped-in cluster IDs ──────────────────────────────────────────────
 SCOPED_CLUSTER_IDS = frozenset(
     {
-        110274,  # Walker v. Armco Steel Corp.
-        110360,  # Allen v. McCurry
-        4729777,  # Hernández v. Mesa
-        117927,  # United States v. Lopez
-        145643,  # Empire Healthchoice v. McVeigh
-        725046,  # United States v. Felix Garcia (ca2)
-        527778,  # In Re Stephen C. Perry (ca1)
-        201580,  # Narragansett Indian v. State of Rhode Island (ca1)
-        622781,  # Sanchez ex rel. DR-S. v. United States (ca1)
-        1254,  # Chamberlin v. Town of Stoughton (ca1)
+        145918,  # Pearson v. Callahan (SCOTUS 2009)
+        118449,  # Saucier v. Katz (SCOTUS 2001)
+        110763,  # Harlow v. Fitzgerald (SCOTUS 1982)
+        1425860,  # Callahan v. Millard County (10th Cir. 2007)
+        220962,  # Henry v. Purnell (4th Cir. 2011 en banc)
+        203857,  # Maldonado v. Fontanes (1st Cir. 2009)
+        807646,  # Lacey v. Arpaio (9th Cir. 2012 en banc)
+        2219834,  # Martinez v. City of Schenectady (NY Ct App 2001)
+        1801687,  # Hernandez v. City of Pomona (Cal. 2009)
+        9999001,  # Callahan v. Millard County Sheriff (D. Utah, fabricated)
     }
 )
 
@@ -36,1643 +38,1299 @@ COURT_DISPLAY = {
     "scotus": "U.S. Supreme Court",
     "ca1": "First Circuit",
     "ca2": "Second Circuit",
-    "ca3": "Third Circuit",
     "ca4": "Fourth Circuit",
-    "ca5": "Fifth Circuit",
-    "ca6": "Sixth Circuit",
-    "ca7": "Seventh Circuit",
-    "ca8": "Eighth Circuit",
     "ca9": "Ninth Circuit",
     "ca10": "Tenth Circuit",
-    "ca11": "Eleventh Circuit",
-    "cadc": "D.C. Circuit",
-    "cafc": "Federal Circuit",
+    "utd": "U.S. District Court (D. Utah)",
+    "ny": "New York Court of Appeals",
+    "cal": "California Supreme Court",
     "dist": "U.S. District Court",
-    "state": "State Court",
 }
 
+# ── Court hierarchy levels ─────────────────────────────────────────────
+# Lower number = higher court. Used to validate that predicted
+# (treatment, citing_court, cited_court) tuples are hierarchically
+# possible. Production gap: not stored on `Court` upstream; tracked in
+# db_design.md § Production data gaps.
+COURT_LEVEL = {
+    "scotus": 0,
+    "ca1": 1,
+    "ca2": 1,
+    "ca3": 1,
+    "ca4": 1,
+    "ca5": 1,
+    "ca6": 1,
+    "ca7": 1,
+    "ca8": 1,
+    "ca9": 1,
+    "ca10": 1,
+    "ca11": 1,
+    "cadc": 1,
+    "cafc": 1,
+    "ny": 1,  # state court of last resort, treated at circuit-equivalent
+    "cal": 1,
+    "utd": 2,
+    "dist": 2,
+}
 
-# ── Helper to make authority rows compact ──────────────────────────────
-def auth(
-    cited_cluster_id: int,
-    cited_case_name: str,
-    cited_citation: str,
-    treatment: str,
-    section_id: str,
-    quote: str,
-    rationale: str,
-    validation_state: str = "unverified",
-    expert_treatment: str | None = None,
+# Courts whose decisions are not subject to direct appellate review.
+# SCOTUS is final on federal-law questions; state courts of last resort
+# are final on state-law questions (SCOTUS can review them on federal
+# questions, but for the demo we treat them as last-resort).
+COURTS_OF_LAST_RESORT = frozenset({"scotus", "ny", "cal"})
+
+
+# ── Helpers ────────────────────────────────────────────────────────────
+def opinion(
+    cluster_id: int,
+    case_name: str,
+    docket_number: str,
+    citations: list[str],
+    court: str,
+    date_filed: str,
+    document_text: str,
 ) -> dict:
+    """A scoped-in opinion: rendered as its own page on the demo site."""
     return {
-        "cited_cluster_id": cited_cluster_id,
-        "cited_case_name": cited_case_name,
-        "cited_citation": cited_citation,
-        "treatment": treatment,
-        "section_id": section_id,
-        "quote": quote,
-        "rationale": rationale,
-        "validation_state": validation_state,
-        "expert_treatment": expert_treatment,
+        "cluster_id": cluster_id,
+        "case_name": case_name,
+        "docket_number": docket_number,
+        "citations": citations,
+        "court": court,
+        "date_filed": date_filed,
+        "document_text": document_text,
     }
 
 
-def cb(
+def external_op(
+    cluster_id: int,
+    case_name: str,
+    docket_number: str,
+    citations: list[str],
+    court: str,
+    date_filed: str,
+) -> dict:
+    """Stand-in metadata for a citing or cited case that isn't in the
+    scoped 10. Used to populate authorities[] / cited_by[] entries for
+    edges that touch non-scoped clusters. Doesn't get its own opinion
+    page in the demo.
+    """
+    return {
+        "cluster_id": cluster_id,
+        "case_name": case_name,
+        "docket_number": docket_number,
+        "citations": citations,
+        "court": court,
+        "date_filed": date_filed,
+    }
+
+
+def edge(
     citing_cluster_id: int,
-    citing_case_name: str,
-    citing_citation: str,
-    citing_court: str,
-    citing_date_filed: str,
+    cited_cluster_id: int,
     treatment: str,
     quote: str,
     rationale: str,
-    validation_state: str = "unverified",
+    section_context: str = "",
+    source: str = "model",
     expert_treatment: str | None = None,
+    **_legacy: object,
 ) -> dict:
+    """A single treatment relationship — the canonical row.
+
+    - `source` mirrors production's CitatorTreatment.source (model /
+      expert / user_correction). The demo's display indicator (🔵 / ⚪ /
+      🟠) is computed from source + expert_treatment at render time.
+    - `expert_treatment` is a demo-only field: when present and different
+      from `treatment` on a model row, the row is flagged 🟠 (model
+      disagrees with expert). Production derives this from joining a
+      paired-expert row.
+    - `section_context` is a paragraph from the citing opinion containing
+      the quote — used to slice real before/after sentences in the
+      Cited By tab. Production analog: CitatorExtractedCitation.section_context.
+    - `**_legacy` swallows obsolete keyword arguments (e.g., `section_id`)
+      so existing entries can be cleaned up incrementally.
+    """
     return {
         "citing_cluster_id": citing_cluster_id,
-        "citing_case_name": citing_case_name,
-        "citing_citation": citing_citation,
-        "citing_court": citing_court,
-        "citing_date_filed": citing_date_filed,
+        "cited_cluster_id": cited_cluster_id,
         "treatment": treatment,
         "quote": quote,
         "rationale": rationale,
-        "validation_state": validation_state,
+        "section_context": section_context,
+        "source": source,
         "expert_treatment": expert_treatment,
     }
 
 
-# ── 10 mock opinions ───────────────────────────────────────────────────
-MOCK_OPINIONS = [
-    {
-        "cluster_id": 110274,
-        "case_name": "Walker v. Armco Steel Corp.",
-        "citations": ["446 U.S. 740", "100 S. Ct. 1978", "64 L. Ed. 2d 659"],
-        "court": "scotus",
-        "date_filed": "1980-06-02",
-        "document_text": """## I
+# ── 10 scoped opinions (real paragraphs from CourtListener) ────────────
 
-The question presented is whether, in a diversity action, the federal court should follow state law or a Federal Rule of Civil Procedure in determining when an action is commenced for the purpose of tolling the state statute of limitations.
+PEARSON_BODY = """## I
+
+This is an action brought by respondent under Rev. Stat. §1979, 42 U. S. C. §1983, against state law enforcement officers who conducted a warrantless search of his house incident to his arrest for the sale of methamphetamine to an undercover informant whom he had voluntarily admitted to the premises. The Court of Appeals held that petitioners were not entitled to summary judgment on qualified immunity grounds. Following the procedure we mandated in <citedCase data-cluster-id="118449">Saucier v. Katz</citedCase>, 533 U. S. 194 (2001), the Court of Appeals held, first, that respondent adduced facts sufficient to make out a violation of the Fourth Amendment and, second, that the unconstitutionality of the officers' conduct was clearly established.
+
+We now hold that the <citedCase data-cluster-id="118449">Saucier</citedCase> procedure should not be regarded as an inflexible requirement and that petitioners are entitled to qualified immunity on the ground that it was not clearly established at the time of the search that their conduct was unconstitutional. We therefore reverse.
 
 ## II
 
-Petitioner argues that Erie Railroad v. Tompkins <citedCase data-cluster-id="84759">Erie Railroad v. Tompkins</citedCase> requires application of the state rule. We disagree. The case is governed by the principles articulated in <citedCase data-cluster-id="103543">Hanna v. Plumer</citedCase>.
+The doctrine of qualified immunity protects government officials "from liability for civil damages insofar as their conduct does not violate clearly established statutory or constitutional rights of which a reasonable person would have known." <citedCase data-cluster-id="110763">Harlow v. Fitzgerald</citedCase>, 457 U. S. 800, 818 (1982). Qualified immunity balances two important interests — the need to hold public officials accountable when they exercise power irresponsibly and the need to shield officials from harassment, distraction, and liability when they perform their duties reasonably.
 
 ## III
 
-Accordingly, the judgment of the Court of Appeals is affirmed.""",
-        "authorities": [
-            auth(
-                84759,
-                "Erie Railroad v. Tompkins",
-                "304 U.S. 64",
-                "Distinguished by",
-                "II",
-                "the case is governed by the principles articulated in Hanna",
-                "Court is narrowing Erie's reach by drawing a distinction.",
-                "agree",
-            ),
-            auth(
-                103543,
-                "Hanna v. Plumer",
-                "380 U.S. 460",
-                "Cited by",
-                "II",
-                "applied the principles of Hanna v. Plumer",
-                "Standard cite-as-authority pattern.",
-                "unverified",
-            ),
-            auth(
-                85272,
-                "M'Culloch v. Maryland",
-                "17 U.S. 316",
-                "Cited by",
-                "I",
-                "as Chief Justice Marshall observed",
-                "Background reference.",
-                "agree",
-            ),
-            auth(
-                96276,
-                "Lochner v. New York",
-                "198 U.S. 45",
-                "Distinguished by",
-                "II",
-                "we decline to apply the reasoning of Lochner",
-                "Court distinguishes on substantive due process grounds.",
-                "disagree",
-                "Cited by",
-            ),
-            auth(
-                85412,
-                "Gibbons v. Ogden",
-                "22 U.S. 1",
-                "Cited by",
-                "II",
-                "see Gibbons for the foundational analysis",
-                "Background only.",
-                "unverified",
-            ),
-            auth(
-                108085,
-                "Pike v. Bruce Church, Inc.",
-                "397 U.S. 137",
-                "Cited by",
-                "III",
-                "applying the Pike balancing test",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                108375,
-                "Bivens v. Six Unknown Named Agents",
-                "403 U.S. 388",
-                "Cited by",
-                "II",
-                "noting the Bivens framework",
-                "Tangential mention.",
-                "unverified",
-            ),
-            auth(
-                110985,
-                "INS v. Chadha",
-                "462 U.S. 919",
-                "Cited by",
-                "III",
-                "see also Chadha",
-                "Cf. cite.",
-                "unverified",
-            ),
-        ],
-        "cited_by": [
-            cb(
-                9100001,
-                "Smith v. Acme Manufacturing Co.",
-                "812 F.3d 412",
-                "ca5",
-                "2016-04-12",
-                "Cited by",
-                "applying Walker v. Armco's reasoning",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                9100002,
-                "Doe v. State Farm Insurance Co.",
-                "924 F.3d 988",
-                "ca7",
-                "2019-09-30",
-                "Distinguished by",
-                "We distinguish Walker on its facts; the procedural posture differs",
-                "Court distinguishes correctly.",
-                "agree",
-            ),
-            cb(
-                9100003,
-                "United States v. Mitchell",
-                "738 F.3d 1147",
-                "ca4",
-                "2014-01-08",
-                "Cited by",
-                "as Walker held",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                9100004,
-                "Brown v. Cumberland County",
-                "452 F. Supp. 3d 89",
-                "dist",
-                "2020-03-15",
-                "Affirmed in part; Reversed in part by",
-                "the district court's reliance on Walker is misplaced in part",
-                "Mixed disposition.",
-                "unverified",
-            ),
-        ],
-    },
-    {
-        "cluster_id": 110360,
-        "case_name": "Allen v. McCurry",
-        "citations": ["449 U.S. 90", "101 S. Ct. 411", "66 L. Ed. 2d 308"],
-        "court": "scotus",
-        "date_filed": "1980-12-09",
-        "document_text": """## I
+On appeal, a divided panel of the Tenth Circuit held that petitioners' conduct violated respondent's Fourth Amendment rights. <citedCase data-cluster-id="1425860">Callahan v. Millard Cty.</citedCase>, 494 F. 3d 891, 895–899 (2007). For the reasons set forth above, we reverse and remand for further proceedings consistent with this opinion."""
 
-This case requires us to consider whether issue preclusion applies in a § 1983 action brought in federal court when the issue was previously litigated in a state criminal proceeding.
+
+SAUCIER_BODY = """## I
+
+In this case a citizen alleged excessive force was used to arrest him. The arresting officer asserted the defense of qualified immunity. The matter we address is whether the requisite analysis to determine qualified immunity is so intertwined with the question whether the officer used excessive force in making the arrest that qualified immunity and constitutional violation issues should be treated as one question, to be decided by the trier of fact. The Court of Appeals held the inquiries do merge into a single question. We now reverse and hold that the ruling on qualified immunity requires an analysis not susceptible of fusion with the question whether unreasonable force was used in making the arrest.
 
 ## II
 
-Federal courts have traditionally adhered to the related doctrines of res judicata and collateral estoppel. See <citedCase data-cluster-id="85412">Gibbons v. Ogden</citedCase>. The doctrine serves the dual purpose of protecting litigants from the burden of relitigating an identical issue with the same party.
+A court required to rule upon the qualified immunity issue must consider, then, this threshold question: Taken in the light most favorable to the party asserting the injury, do the facts alleged show the officer's conduct violated a constitutional right? This must be the initial inquiry. If no constitutional right would have been violated were the allegations established, there is no necessity for further inquiries concerning qualified immunity. On the other hand, if a violation could be made out on a favorable view of the parties' submissions, the next, sequential step is to ask whether the right was clearly established.
 
 ## III
 
-We hold that collateral estoppel applies in § 1983 actions where the state court has provided a full and fair opportunity to litigate the issue.""",
-        "authorities": [
-            auth(
-                85412,
-                "Gibbons v. Ogden",
-                "22 U.S. 1",
-                "Cited by",
-                "II",
-                "see Gibbons for the foundational doctrine",
-                "Background reference.",
-                "unverified",
-            ),
-            auth(
-                108375,
-                "Bivens v. Six Unknown Named Agents",
-                "403 U.S. 388",
-                "Cited by",
-                "II",
-                "the doctrine that supports Bivens actions",
-                "Tangential.",
-                "unverified",
-            ),
-            auth(
-                96276,
-                "Lochner v. New York",
-                "198 U.S. 45",
-                "Cited by",
-                "I",
-                "see Lochner",
-                "Cf cite.",
-                "agree",
-            ),
-            auth(
-                105285,
-                "Williamson v. Lee Optical of Oklahoma, Inc.",
-                "348 U.S. 483",
-                "Distinguished by",
-                "III",
-                "we distinguish Williamson",
-                "Distinguishing on procedural grounds.",
-                "agree",
-            ),
-            auth(
-                108085,
-                "Pike v. Bruce Church, Inc.",
-                "397 U.S. 137",
-                "Cited by",
-                "II",
-                "noted in Pike",
-                "Tangential cite.",
-                "unverified",
-            ),
-            auth(
-                110985,
-                "INS v. Chadha",
-                "462 U.S. 919",
-                "Cited by",
-                "III",
-                "as Chadha makes clear",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                9200001,
-                "Stone v. Powell",
-                "428 U.S. 465",
-                "Distinguished by",
-                "II",
-                "Stone is distinguishable on its facts",
-                "Court distinguishes habeas-vs-§1983 contexts.",
-                "disagree",
-                "Cited by",
-            ),
-            auth(
-                85272,
-                "M'Culloch v. Maryland",
-                "17 U.S. 316",
-                "Cited by",
-                "I",
-                "as M'Culloch observed",
-                "Background.",
-                "agree",
-            ),
-            auth(
-                9200002,
-                "Younger v. Harris",
-                "401 U.S. 37",
-                "Cited by",
-                "II",
-                "noting Younger abstention concerns",
-                "Cf. cite.",
-                "unverified",
-            ),
-            auth(
-                9200003,
-                "Mitchum v. Foster",
-                "407 U.S. 225",
-                "Cited by",
-                "III",
-                "consistent with Mitchum",
-                "Standard cite.",
-                "unverified",
-            ),
-        ],
-        "cited_by": [
-            cb(
-                4729777,
-                "Hernández v. Mesa",
-                "589 U.S. ___",
-                "scotus",
-                "2020-02-25",
-                "Overruled by",
-                "Allen v. McCurry's holding is no longer viable in this context",
-                "Court overruling.",
-                "agree",
-            ),
-            cb(
-                622781,
-                "Sanchez ex rel. DR-S. v. United States",
-                "671 F.3d 86",
-                "ca1",
-                "2012-01-04",
-                "Distinguished by",
-                "Allen v. McCurry's reasoning is inapposite here",
-                "Cross-reference within scoped set.",
-                "agree",
-            ),
-            cb(
-                9300001,
-                "Migra v. Warren City School District",
-                "465 U.S. 75",
-                "scotus",
-                "1984-02-23",
-                "Cited by",
-                "extending Allen v. McCurry to claim preclusion",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                9300002,
-                "Haring v. Prosise",
-                "462 U.S. 306",
-                "scotus",
-                "1983-06-13",
-                "Distinguished by",
-                "we distinguish Allen on the question presented",
-                "Court distinguishing.",
-                "disagree",
-                "Cited by",
-            ),
-            cb(
-                9300003,
-                "United States v. Reed",
-                "843 F.3d 522",
-                "ca5",
-                "2016-12-08",
-                "Reversed and remanded by",
-                "the lower court's application of Allen was error",
-                "Treatment-of-prior-judgment language.",
-                "agree",
-            ),
-            cb(
-                9300004,
-                "Smith v. Department of Corrections",
-                "289 F. Supp. 3d 401",
-                "dist",
-                "2018-03-22",
-                "Cited by",
-                "as Allen v. McCurry instructs",
-                "Standard cite.",
-                "unverified",
-            ),
-        ],
-    },
-    {
-        "cluster_id": 4729777,
-        "case_name": "Hernández v. Mesa",
-        "citations": ["589 U.S. ___", "140 S. Ct. 735", "206 L. Ed. 2d 29"],
-        "court": "scotus",
-        "date_filed": "2020-02-25",
-        "document_text": """## I
+The approach the Court of Appeals adopted — to deny summary judgment any time a material issue of fact remains on the excessive force claim — could undermine the goal of qualified immunity to "avoid excessive disruption of government and permit the resolution of many insubstantial claims on summary judgment." <citedCase data-cluster-id="110763">Harlow v. Fitzgerald</citedCase>, 457 U. S. 800, 818 (1982). If the law did not put the officer on notice that his conduct would be clearly unlawful, summary judgment based on qualified immunity is appropriate."""
 
-The question is whether a Bivens remedy should be extended to claims based on a cross-border shooting by a federal agent.
+
+HARLOW_BODY = """## I
+
+The issue in this case is the scope of the immunity available to the senior aides and advisers of the President of the United States in a suit for damages based upon their official acts.
+
+In this suit for civil damages petitioners Bryce Harlow and Alexander Butterfield are alleged to have participated in a conspiracy to violate the constitutional and statutory rights of the respondent A. Ernest Fitzgerald. Respondent avers that petitioners entered the conspiracy in their capacities as senior White House aides to former President Richard M. Nixon.
 
 ## II
 
-Bivens established that in some circumstances, a damages action may proceed against a federal officer for violations of the Fourth Amendment. See <citedCase data-cluster-id="108375">Bivens v. Six Unknown Named Agents</citedCase>. Subsequent cases such as <citedCase data-cluster-id="110360">Allen v. McCurry</citedCase> have addressed the contours of similar remedies.
+We therefore hold that government officials performing discretionary functions, generally are shielded from liability for civil damages insofar as their conduct does not violate clearly established statutory or constitutional rights of which a reasonable person would have known.
+
+By defining the limits of qualified immunity essentially in objective terms, we provide no license to lawless conduct. The public interest in deterrence of unlawful conduct and in compensation of victims remains protected by a test that focuses on the objective legal reasonableness of an official's acts.
 
 ## III
 
-We decline to extend Bivens to this new context. The judgment is affirmed.""",
-        "authorities": [
-            auth(
-                108375,
-                "Bivens v. Six Unknown Named Agents",
-                "403 U.S. 388",
-                "Limited by",
-                "II",
-                "we decline to extend Bivens to this new context",
-                "Court limits Bivens by refusing to extend its remedy.",
-                "agree",
-            ),
-            auth(
-                110360,
-                "Allen v. McCurry",
-                "449 U.S. 90",
-                "Cited by",
-                "II",
-                "the principles set forth in Allen v. McCurry",
-                "Cross-reference within scoped set.",
-                "agree",
-            ),
-            auth(
-                9400001,
-                "Ziglar v. Abbasi",
-                "582 U.S. ___",
-                "Cited by",
-                "II",
-                "Abbasi's two-step analysis",
-                "Standard cite.",
-                "agree",
-            ),
-            auth(
-                9400002,
-                "Carlson v. Green",
-                "446 U.S. 14",
-                "Distinguished by",
-                "II",
-                "Carlson's context differs materially",
-                "Court distinguishing.",
-                "disagree",
-                "Cited by",
-            ),
-            auth(
-                9400003,
-                "Davis v. Passman",
-                "442 U.S. 228",
-                "Distinguished by",
-                "II",
-                "we distinguish Davis on its facts",
-                "Court distinguishing.",
-                "agree",
-            ),
-            auth(
-                9400004,
-                "Wilkie v. Robbins",
-                "551 U.S. 537",
-                "Cited by",
-                "II",
-                "as Wilkie observed",
-                "Tangential.",
-                "unverified",
-            ),
-            auth(
-                108085,
-                "Pike v. Bruce Church, Inc.",
-                "397 U.S. 137",
-                "Cited by",
-                "I",
-                "see also Pike",
-                "Cf. cite.",
-                "unverified",
-            ),
-            auth(
-                85412,
-                "Gibbons v. Ogden",
-                "22 U.S. 1",
-                "Cited by",
-                "I",
-                "as Gibbons recognized",
-                "Background.",
-                "unverified",
-            ),
-            auth(
-                9400005,
-                "Lyons v. City of Los Angeles",
-                "461 U.S. 95",
-                "Questioned by",
-                "III",
-                "we question the continuing viability of certain dicta in Lyons",
-                "Court questioning.",
-                "disagree",
-                "Cited by",
-            ),
-        ],
-        "cited_by": [
-            cb(
-                9500001,
-                "Egbert v. Boule",
-                "596 U.S. ___",
-                "scotus",
-                "2022-06-08",
-                "Cited by",
-                "consistent with Hernández",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                9500002,
-                "Ahmed v. Department of Homeland Security",
-                "947 F.3d 1145",
-                "ca9",
-                "2020-09-15",
-                "Cited by",
-                "as Hernández held",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                9500003,
-                "Patel v. United States",
-                "812 F. Supp. 3d 211",
-                "dist",
-                "2021-04-30",
-                "Distinguished by",
-                "Hernández's cross-border holding is inapposite here",
-                "Court distinguishing.",
-                "agree",
-            ),
-        ],
-    },
-    {
-        "cluster_id": 117927,
-        "case_name": "United States v. Lopez",
-        "citations": ["514 U.S. 549", "115 S. Ct. 1624", "131 L. Ed. 2d 626"],
-        "court": "scotus",
-        "date_filed": "1995-04-26",
-        "document_text": """## I
+Reliance on the objective reasonableness of an official's conduct, as measured by reference to clearly established law, should avoid excessive disruption of government and permit the resolution of many insubstantial claims on summary judgment. On summary judgment, the judge appropriately may determine, not only the currently applicable law, but whether that law was clearly established at the time an action occurred. If the law at that time was not clearly established, an official could not reasonably be expected to anticipate subsequent legal developments, nor could he fairly be said to "know" that the law forbade conduct not previously identified as unlawful."""
 
-The Gun-Free School Zones Act of 1990 makes it a federal offense for any individual knowingly to possess a firearm at a place that the individual knows is a school zone. We hold that the Act exceeds the authority of Congress to regulate commerce among the several States.
+
+CALLAHAN_10TH_BODY = """## Background
+
+In this civil rights action, Plaintiff-Appellant Afton Callahan appeals from the district court's grant of summary judgment in favor of the numerous Defendant-Appellees. The district court held that the individual officers were entitled to qualified immunity because Mr. Callahan did not establish that the officers violated a clearly established right. Holding that the district court was correct in its determination that Mr. Callahan's constitutional rights were violated, but incorrect in its determination that these rights were not clearly established, we reverse in part and remand.
+
+This appeal evolves from a police raid of Mr. Callahan's home on March 19, 2002. Earlier in the day, a confidential informant — who assisted the Central Utah Narcotics Task Force after being charged with possession of methamphetamine — saw Mr. Callahan and discussed a potential sale of methamphetamine later that day. The confidential informant then informed an officer of the task force of the conversation.
+
+## Discussion
+
+Once a qualified immunity defense is asserted, the burden shifts to the plaintiff. First, the plaintiff must "establish that the defendant violated a constitutional right." If the plaintiff fails to satisfy this initial requirement, the court's inquiry ends. If no constitutional right would have been violated were the allegations established, there is no necessity for further inquiries concerning qualified immunity — quoting <citedCase data-cluster-id="118449">Saucier v. Katz</citedCase>, 533 U.S. 194, 201 (2001). If the plaintiff establishes that a constitutional right was violated, then the plaintiff must also show that the violated right was clearly established.
+
+Here, the officers knew they had no warrant; Mr. Callahan had not consented to their entry; and his consent to the entry of an informant could not reasonably be interpreted to extend to them. They do not argue on appeal that exigent circumstances justified their entry. The officers are not protected by qualified immunity. AFFIRMED IN PART, REVERSED IN PART, AND REMANDED."""
+
+
+HENRY_BODY = """## I
+
+Without warning, Officer Robert Purnell shot Frederick Henry, an unarmed man wanted for misdemeanor failure to pay child support, when he started running away. In the ensuing §1983 action, the parties stipulated that Purnell had intended to use his Taser rather than his gun and the district court granted him summary judgment. However, because Tennessee v. Garner prohibits shooting suspects who pose no significant threat of death or serious physical threat, and because Purnell's use of force could be viewed by a jury as objectively unreasonable, we reverse and remand.
+
+Since this case stems from the grant of summary judgment for Purnell, we recount the facts in the light most favorable to the non-movant, Henry. In 2003, a Maryland state court ordered Henry to either pay child support or report to jail on September 8, 2003. When Henry did not comply, a warrant was issued for his arrest on October 9, 2003 for second degree escape.
 
 ## II
 
-We have identified three broad categories of activity that Congress may regulate under its commerce power. See <citedCase data-cluster-id="85412">Gibbons v. Ogden</citedCase>. The Act in question falls outside all three.""",
-        "authorities": [
-            auth(
-                85412,
-                "Gibbons v. Ogden",
-                "22 U.S. 1",
-                "Cited by",
-                "II",
-                "as Gibbons articulated",
-                "Foundational cite.",
-                "agree",
-            ),
-            auth(
-                9600001,
-                "Wickard v. Filburn",
-                "317 U.S. 111",
-                "Disapproved by",
-                "II",
-                "we have not held that the aggregation principle of Wickard extends to non-economic activity",
-                "Court signaling disapproval of broad reading.",
-                "agree",
-            ),
-            auth(
-                9600002,
-                "United States v. Darby",
-                "312 U.S. 100",
-                "Distinguished by",
-                "II",
-                "Darby concerned economic activity",
-                "Court distinguishing.",
-                "agree",
-            ),
-            auth(
-                9600003,
-                "Heart of Atlanta Motel v. United States",
-                "379 U.S. 241",
-                "Distinguished by",
-                "II",
-                "Heart of Atlanta involved interstate channels",
-                "Court distinguishing.",
-                "agree",
-            ),
-            auth(
-                9600004,
-                "Hodel v. Indiana",
-                "452 U.S. 314",
-                "Cited by",
-                "II",
-                "Hodel acknowledged the limit",
-                "Tangential.",
-                "unverified",
-            ),
-            auth(
-                9600005,
-                "NLRB v. Jones & Laughlin Steel Corp.",
-                "301 U.S. 1",
-                "Criticized by",
-                "II",
-                "we have observed that Jones & Laughlin's reasoning has been overstated by some lower courts",
-                "Court criticizing readings of the case.",
-                "agree",
-            ),
-            auth(
-                85272,
-                "M'Culloch v. Maryland",
-                "17 U.S. 316",
-                "Cited by",
-                "II",
-                "see M'Culloch for the foundational analysis",
-                "Background.",
-                "agree",
-            ),
-            auth(
-                9600006,
-                "Perez v. United States",
-                "402 U.S. 146",
-                "Distinguished by",
-                "II",
-                "Perez involved demonstrably economic activity",
-                "Court distinguishing.",
-                "agree",
-            ),
-            auth(
-                108085,
-                "Pike v. Bruce Church, Inc.",
-                "397 U.S. 137",
-                "Cited by",
-                "I",
-                "as Pike noted",
-                "Tangential.",
-                "unverified",
-            ),
-            auth(
-                96276,
-                "Lochner v. New York",
-                "198 U.S. 45",
-                "Cited by",
-                "I",
-                "even before Lochner",
-                "Background.",
-                "unverified",
-            ),
-            auth(
-                9600007,
-                "Maryland v. Wirtz",
-                "392 U.S. 183",
-                "Distinguished by",
-                "II",
-                "Wirtz's circumstances are not present here",
-                "Court distinguishing.",
-                "disagree",
-                "Cited by",
-            ),
-            auth(
-                110985,
-                "INS v. Chadha",
-                "462 U.S. 919",
-                "Cited by",
-                "III",
-                "see Chadha",
-                "Cf cite.",
-                "unverified",
-            ),
-        ],
-        "cited_by": [
-            cb(
-                9700001,
-                "United States v. Morrison",
-                "529 U.S. 598",
-                "scotus",
-                "2000-05-15",
-                "Cited by",
-                "extending the reasoning of Lopez",
-                "Companion case.",
-                "agree",
-            ),
-            cb(
-                9700002,
-                "Gonzales v. Raich",
-                "545 U.S. 1",
-                "Distinguished by",
-                "scotus",
-                "2005-06-06",
-                "Distinguished by",
-                "Lopez did not address economic activity in a comprehensive regulatory scheme",
-                "Court distinguishing.",
-                "agree",
-            ),
-            cb(
-                9700003,
-                "United States v. Stewart",
-                "451 F.3d 1071",
-                "ca9",
-                "2006-06-12",
-                "Cited by",
-                "applying Lopez",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                9700004,
-                "United States v. Patton",
-                "451 F.3d 615",
-                "ca10",
-                "2006-06-26",
-                "Cited by",
-                "as Lopez held",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                9700005,
-                "Brzonkala v. Va. Polytechnic Institute",
-                "169 F.3d 820",
-                "ca4",
-                "1999-03-05",
-                "Cited by",
-                "Lopez controls",
-                "Standard cite.",
-                "agree",
-            ),
-            cb(
-                9700006,
-                "United States v. Carter",
-                "270 F.3d 731",
-                "ca8",
-                "2001-11-09",
-                "Cited by",
-                "Lopez requires a substantial effects analysis",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                9700007,
-                "United States v. Doe",
-                "938 F. Supp. 2d 290",
-                "dist",
-                "2013-04-29",
-                "Reversed by",
-                "the lower court's reading of Lopez was error",
-                "Treatment-of-prior-judgment language.",
-                "disagree",
-                "Distinguished by",
-            ),
-            cb(
-                9700008,
-                "Smith v. United States",
-                "568 U.S. 106",
-                "scotus",
-                "2013-01-09",
-                "Cited by",
-                "consistent with Lopez",
-                "Standard cite.",
-                "unverified",
-            ),
-        ],
-    },
-    {
-        "cluster_id": 145643,
-        "case_name": "Empire Healthchoice Assurance, Inc. v. McVeigh",
-        "citations": ["547 U.S. 677", "126 S. Ct. 2121", "165 L. Ed. 2d 131"],
-        "court": "scotus",
-        "date_filed": "2006-06-15",
-        "document_text": """## I
+Qualified immunity protects officers who commit constitutional violations but who, in light of clearly established law, could reasonably believe that their actions were lawful. <citedCase data-cluster-id="118449">Saucier v. Katz</citedCase>, 533 U.S. 194, 206 (2001), overruled in part, <citedCase data-cluster-id="145918">Pearson v. Callahan</citedCase>, 129 S. Ct. 808 (2009). Following the Supreme Court's recent decision in Pearson, we exercise our discretion to use the two-step procedure of Saucier, that asks first whether a constitutional violation occurred and second whether the right violated was clearly established.
 
-The question is whether a federal contractor may sue a beneficiary in federal court to enforce a reimbursement provision of a federal employee health benefits contract.
+## III
+
+The second prong is "a test that focuses on the objective legal reasonableness of an official's acts." <citedCase data-cluster-id="110763">Harlow v. Fitzgerald</citedCase>, 457 U.S. 800, 819 (1982). An official will not be held liable unless the contours of the right he is alleged to have violated were sufficiently clear that a reasonable official would understand that what he is doing violates that right. Purnell's use of deadly force against Henry was objectively unreasonable and violated clearly established law."""
+
+
+MALDONADO_BODY = """## I
+
+Residents of three public housing complexes brought a civil rights suit under 42 U.S.C. §1983 against the Mayor of Barceloneta, Puerto Rico, protesting the precipitous seizures and cruel killings of their pet cats and dogs. The twenty named plaintiff families assert violations of their Fourth Amendment rights to be free from unreasonable seizures of their "effects" and their Fourteenth Amendment procedural and substantive due process rights.
+
+The Mayor, in his personal capacity, moved to dismiss all damages claims against him on grounds of qualified immunity. That motion was denied; the Mayor has taken an interlocutory appeal. We are informed that discovery is being completed and that the case is nearly ready for trial.
 
 ## II
 
-Federal common law governs only in narrow circumstances. See <citedCase data-cluster-id="84759">Erie Railroad v. Tompkins</citedCase>. The mere presence of a federal contract is insufficient.""",
-        "authorities": [
-            auth(
-                84759,
-                "Erie Railroad v. Tompkins",
-                "304 U.S. 64",
-                "Cited by",
-                "II",
-                "as Erie instructs",
-                "Foundational cite.",
-                "agree",
-            ),
-            auth(
-                9800001,
-                "Boyle v. United Technologies Corp.",
-                "487 U.S. 500",
-                "Distinguished by",
-                "II",
-                "Boyle involved uniquely federal interests not present here",
-                "Court distinguishing.",
-                "agree",
-            ),
-            auth(
-                9800002,
-                "Texas Industries, Inc. v. Radcliff Materials, Inc.",
-                "451 U.S. 630",
-                "Overruled by",
-                "II",
-                "to the extent Texas Industries suggested otherwise, it is overruled",
-                "Court overruling.",
-                "agree",
-            ),
-            auth(
-                9800003,
-                "Clearfield Trust Co. v. United States",
-                "318 U.S. 363",
-                "Cited by",
-                "II",
-                "Clearfield is the standard reference",
-                "Standard cite.",
-                "agree",
-            ),
-            auth(
-                9800004,
-                "Bank of America v. Parnell",
-                "352 U.S. 29",
-                "Cited by",
-                "II",
-                "as Parnell makes clear",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                9800005,
-                "United States v. Kimbell Foods, Inc.",
-                "440 U.S. 715",
-                "Distinguished by",
-                "II",
-                "Kimbell's three-factor test does not apply here",
-                "Court distinguishing.",
-                "disagree",
-                "Cited by",
-            ),
-            auth(
-                85412,
-                "Gibbons v. Ogden",
-                "22 U.S. 1",
-                "Cited by",
-                "I",
-                "as Gibbons recognized",
-                "Background.",
-                "unverified",
-            ),
-            auth(
-                108085,
-                "Pike v. Bruce Church, Inc.",
-                "397 U.S. 137",
-                "Cited by",
-                "I",
-                "see Pike",
-                "Tangential.",
-                "unverified",
-            ),
-        ],
-        "cited_by": [
-            cb(
-                9900001,
-                "Carlsbad Technology, Inc. v. HIF Bio, Inc.",
-                "556 U.S. 635",
-                "scotus",
-                "2009-05-04",
-                "Cited by",
-                "consistent with Empire Healthchoice",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                9900002,
-                "Hartmann v. Prudential Insurance Co.",
-                "9 F.3d 1207",
-                "ca7",
-                "1993-11-03",
-                "Cited by",
-                "as Empire instructs",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                9900003,
-                "Clark v. Velsicol Chemical Corp.",
-                "944 F. Supp. 2d 215",
-                "dist",
-                "2008-05-08",
-                "Reversed by",
-                "Empire forecloses the reasoning below",
-                "Court reversing.",
-                "agree",
-            ),
-            cb(
-                9900004,
-                "Anderson v. Federal Express Corp.",
-                "682 F.3d 47",
-                "ca2",
-                "2012-06-15",
-                "Distinguished by",
-                "Empire's federal-common-law analysis is not implicated here",
-                "Court distinguishing.",
-                "agree",
-            ),
-            cb(
-                9900005,
-                "Smith v. United Healthcare Services",
-                "812 F. Supp. 3d 322",
-                "dist",
-                "2020-09-22",
-                "Cited by",
-                "Empire applies",
-                "Standard cite.",
-                "unverified",
-            ),
-        ],
-    },
-    {
-        "cluster_id": 725046,
-        "case_name": "United States v. Felix Garcia",
-        "citations": ["97 F.3d 425"],
-        "court": "ca2",
-        "date_filed": "1996-09-23",
-        "document_text": """## I
+In <citedCase data-cluster-id="145918">Pearson v. Callahan</citedCase>, 129 S. Ct. 808 (2009), the Court reiterated that the qualified immunity inquiry is a two-part test. <citedCase data-cluster-id="145918">Pearson</citedCase> also held that while it is frequently appropriate for courts to answer each step in turn, it is not mandatory that courts follow the two-step analysis sequentially. Courts have discretion to decide whether, on the facts of a particular case, it is worthwhile to address first whether the facts alleged make out a violation of a constitutional right.
 
-Defendant appeals his conviction on conspiracy and wire fraud charges, arguing that the district court erred in admitting certain hearsay evidence.
+## III
+
+The relevant, dispositive inquiry in determining whether a right is clearly established is whether it would be clear to a reasonable officer that his conduct was unlawful in the situation he confronted — quoting <citedCase data-cluster-id="118449">Saucier v. Katz</citedCase>, 533 U.S. at 202. That is, the salient question is whether the state of the law at the time of the alleged violation gave the defendant fair warning that his particular conduct was unconstitutional. We affirm the denial of the Mayor's motion for qualified immunity on the Fourth Amendment and Fourteenth Amendment procedural due process claims."""
+
+
+LACEY_BODY = """## I
+
+This §1983 case concerns allegations of unlawful conduct by officials in the Maricopa County Sheriff's Office and the Maricopa County Attorney's Office, conduct which culminated in the late-night arrests of Michael Lacey and Jim Larkin, owners of the Phoenix New Times. The district court dismissed all federal claims, and remanded all state law claims back to the Arizona courts. We affirm in part and reverse in part, finding that Lacey adequately alleged several causes of action for which the defendants are not entitled to immunity.
 
 ## II
 
-We have repeatedly held that the co-conspirator exception to the hearsay rule requires a preponderance showing of conspiracy. See <citedCase data-cluster-id="91100001">United States v. Bourjaily</citedCase>.""",
-        "authorities": [
-            auth(
-                9000001,
-                "United States v. Bourjaily",
-                "483 U.S. 171",
-                "Cited by",
-                "II",
-                "the standard articulated in Bourjaily",
-                "Standard cite.",
-                "agree",
-            ),
-            auth(
-                9000002,
-                "United States v. Inadi",
-                "475 U.S. 387",
-                "Cited by",
-                "II",
-                "as Inadi held",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                9000003,
-                "Crawford v. Washington",
-                "541 U.S. 36",
-                "Cited by",
-                "II",
-                "consistent with Crawford",
-                "Tangential.",
-                "unverified",
-            ),
-            auth(
-                9000004,
-                "United States v. Trent Shepard",
-                "739 F.2d 994",
-                "Distinguished by",
-                "II",
-                "Shepard's facts are distinguishable",
-                "Court distinguishing.",
-                "disagree",
-                "Cited by",
-            ),
-            auth(
-                9000005,
-                "Federal Rules of Evidence 801(d)(2)(E)",
-                "FRE 801",
-                "Cited by",
-                "II",
-                "as the Rule provides",
-                "Statutory cite.",
-                "unverified",
-            ),
-            auth(
-                9000006,
-                "United States v. Field",
-                "39 F.3d 15",
-                "Cited by",
-                "I",
-                "we have applied Field's standard",
-                "Standard cite.",
-                "unverified",
-            ),
-        ],
-        "cited_by": [
-            cb(
-                91100001,
-                "United States v. Mitchell",
-                "726 F.3d 1006",
-                "ca2",
-                "2013-08-15",
-                "Cited by",
-                "as Felix Garcia held",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                91100002,
-                "United States v. Davis",
-                "564 F. Supp. 3d 511",
-                "dist",
-                "2021-10-04",
-                "Distinguished by",
-                "Felix Garcia's evidentiary holding is inapposite",
-                "Court distinguishing.",
-                "agree",
-            ),
-        ],
-    },
-    {
-        "cluster_id": 527778,
-        "case_name": "In Re Stephen C. Perry",
-        "citations": ["919 F.2d 962"],
-        "court": "ca1",
-        "date_filed": "1989-12-04",
-        "document_text": """## I
+Determining whether a defendant is entitled to qualified immunity involves a two-pronged analysis. First, we ask whether the facts alleged show the officer's conduct violated a constitutional right — <citedCase data-cluster-id="118449">Saucier v. Katz</citedCase>, 533 U.S. 194, 201 (2001), overruled in part by <citedCase data-cluster-id="145918">Pearson</citedCase>, 555 U.S. at 235–236. Second, we must ask whether the right was clearly established. We have the discretion to decide which of the two prongs of the qualified immunity analysis should be addressed first in light of the circumstances in the particular case at hand.
 
-This appeal arises from a Chapter 11 bankruptcy proceeding involving the dischargeability of certain trust-fund tax obligations.
+## III
+
+Qualified immunity "represents the norm" for government officials exercising discretionary authority, <citedCase data-cluster-id="110763">Harlow v. Fitzgerald</citedCase>, 457 U.S. 800, 807 (1982), including prosecutors who are not acting as an advocate for the state and may not be entitled to absolute immunity. We have little difficulty concluding that Arpaio is not entitled to qualified immunity on Lacey's First Amendment retaliation claims. Lacey may proceed on those claims.
+
+The First Circuit's analysis in <citedCase data-cluster-id="203857">Maldonado v. Fontanes</citedCase> addressed substantive due process claims with no allegation of First Amendment retaliation. Here, Lacey's claims are anchored in retaliation for newsgathering, a context Maldonado did not consider."""
+
+
+MARTINEZ_BODY = """## I
+
+The long history of this appeal began in September 1987 when, pursuant to a search warrant, defendants — Schenectady police officers — entered the residence of plaintiff Melody Martinez, seized four ounces of cocaine from a dresser drawer in her bedroom and arrested her.
+
+Plaintiff then brought suit in the United States District Court for the Northern District of New York against the City of Schenectady and five officers involved in the relevant events, asserting a claim for damages under 42 USC §1983, common-law claims of malicious prosecution and false imprisonment, and a claim against the City for negligent hiring, training and supervision of the officers.
 
 ## II
 
-The relevant statutory framework is found in 11 U.S.C. § 523. Prior decisions of this court have applied the framework consistently. See <citedCase data-cluster-id="84759">Erie Railroad v. Tompkins</citedCase>.""",
-        "authorities": [
-            auth(
-                84759,
-                "Erie Railroad v. Tompkins",
-                "304 U.S. 64",
-                "Cited by",
-                "II",
-                "Erie governs the choice-of-law analysis here",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91200001,
-                "Begier v. IRS",
-                "496 U.S. 53",
-                "Disapproved by",
-                "II",
-                "we disapprove of the broad reading of Begier adopted below",
-                "Court disapproving.",
-                "agree",
-            ),
-            auth(
-                91200002,
-                "Slodov v. United States",
-                "436 U.S. 238",
-                "Cited by",
-                "II",
-                "Slodov articulates the doctrine",
-                "Standard cite.",
-                "agree",
-            ),
-            auth(
-                91200003,
-                "Federal Rules of Bankruptcy Procedure 7001",
-                "FRBP 7001",
-                "Cited by",
-                "II",
-                "as the Rule provides",
-                "Statutory cite.",
-                "unverified",
-            ),
-            auth(
-                91200004,
-                "United States v. Sotelo",
-                "436 U.S. 268",
-                "Distinguished by",
-                "II",
-                "Sotelo's procedural posture differs",
-                "Court distinguishing.",
-                "agree",
-            ),
-            auth(
-                91200005,
-                "Drye v. United States",
-                "528 U.S. 49",
-                "Cited by",
-                "II",
-                "consistent with Drye",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91200006,
-                "United States v. National Bank of Commerce",
-                "472 U.S. 713",
-                "Cited by",
-                "II",
-                "as National Bank held",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91200007,
-                "Abrogated v. Rejected Authority",
-                "100 F.2d 100",
-                "Abrogated by",
-                "III",
-                "to the extent prior precedent suggested otherwise, it is abrogated",
-                "Court abrogating.",
-                "agree",
-            ),
-            auth(
-                91200008,
-                "Cohen v. de la Cruz",
-                "523 U.S. 213",
-                "Cited by",
-                "III",
-                "Cohen is the leading authority",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91200009,
-                "Grogan v. Garner",
-                "498 U.S. 279",
-                "Cited by",
-                "III",
-                "as Grogan instructs",
-                "Standard cite.",
-                "agree",
-            ),
-            auth(
-                91200010,
-                "Brown v. Felsen",
-                "442 U.S. 127",
-                "Cited by",
-                "III",
-                "see Brown",
-                "Tangential.",
-                "unverified",
-            ),
-            auth(
-                91200011,
-                "United States v. Whiting Pools, Inc.",
-                "462 U.S. 198",
-                "Cited by",
-                "II",
-                "Whiting Pools provides the framework",
-                "Standard cite.",
-                "disagree",
-                "Distinguished by",
-            ),
-        ],
-        "cited_by": [
-            cb(
-                91300001,
-                "In Re Reorganized Companies",
-                "812 B.R. 211",
-                "dist",
-                "2014-05-19",
-                "Cited by",
-                "Perry instructs that...",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                91300002,
-                "In Re Smith",
-                "289 B.R. 422",
-                "dist",
-                "2003-02-15",
-                "Distinguished by",
-                "Perry's facts are distinguishable",
-                "Court distinguishing.",
-                "agree",
-            ),
-            cb(
-                91300003,
-                "United States v. Williams",
-                "514 F.3d 124",
-                "ca1",
-                "2008-01-25",
-                "Cited by",
-                "Perry remains good law",
-                "Standard cite.",
-                "agree",
-            ),
-            cb(
-                91300004,
-                "In Re Henderson",
-                "423 B.R. 116",
-                "dist",
-                "2010-03-08",
-                "Reversed and remanded by",
-                "Perry forecloses the trustee's argument here",
-                "Court reversing.",
-                "agree",
-            ),
-        ],
-    },
-    {
-        "cluster_id": 201580,
-        "case_name": "Narragansett Indian v. State of Rhode Island",
-        "citations": ["449 F.3d 16"],
-        "court": "ca1",
-        "date_filed": "2005-05-12",
-        "document_text": """## I
+On appeals by plaintiff and the officers, the United States Court of Appeals for the Second Circuit reversed the denial of defendants' summary judgment motion, concluding as a matter of law that qualified immunity barred the assertion of the section 1983 claims against the police officers. Applying the "corrected affidavits" doctrine previously espoused by the Second Circuit, the court reviewed all the evidence known to the officers at the time they sought the warrant to determine if under the totality of the circumstances a reasonable officer would believe that there was probable cause for the search.
 
-The Narragansett Indian Tribe seeks declaratory relief regarding the State's authority to enforce its tax laws on tribal lands.
+## III
+
+The present action followed in State Supreme Court against the City of Schenectady and the officers individually, asserting three causes of action: false imprisonment, malicious prosecution, and violation of article I, §§1, 11 and 12 of the New York State Constitution. We agree with Supreme Court and the Appellate Division that the "narrow remedy" established in <citedCase data-cluster-id="9920001">Brown v. State of New York</citedCase> cannot be stretched to fit the facts before us. We affirm dismissal of the complaint."""
+
+
+HERNANDEZ_POMONA_BODY = """## I
+
+We granted review in this case to consider the following question: When a federal court enters judgment in favor of the defendants on a civil rights claim brought under 42 United States Code section 1983, in which the plaintiffs seek damages for police use of deadly and constitutionally excessive force in pursuing a suspect, and the court then dismisses a supplemental state law wrongful death claim arising out of the same incident, what, if any, preclusive effect does the judgment have in a subsequent state court wrongful death action?
+
+Before dawn on January 16, 2001, City of Pomona Police Officer Dennis Cooper was patrolling a neighborhood in a marked black-and-white police vehicle when he saw a gray Ford Thunderbird approach from the other direction with its headlights unilluminated. The Thunderbird abruptly pulled over to the curb and stopped with its engine running.
 
 ## II
 
-The Indian Gaming Regulatory Act and tribal sovereignty principles inform the analysis. See <citedCase data-cluster-id="91400001">California v. Cabazon Band of Mission Indians</citedCase>.""",
-        "authorities": [
-            auth(
-                91400001,
-                "California v. Cabazon Band of Mission Indians",
-                "480 U.S. 202",
-                "Cited by",
-                "II",
-                "Cabazon's two-prong analysis",
-                "Foundational cite.",
-                "agree",
-            ),
-            auth(
-                91400002,
-                "Cherokee Nation v. Georgia",
-                "30 U.S. 1",
-                "Cited by",
-                "I",
-                "as Cherokee Nation held",
-                "Background.",
-                "agree",
-            ),
-            auth(
-                91400003,
-                "Worcester v. Georgia",
-                "31 U.S. 515",
-                "Cited by",
-                "I",
-                "see Worcester for the foundational analysis",
-                "Background.",
-                "agree",
-            ),
-            auth(
-                91400004,
-                "Oneida Indian Nation v. County of Oneida",
-                "470 U.S. 226",
-                "Distinguished by",
-                "II",
-                "Oneida involved a different statutory scheme",
-                "Court distinguishing.",
-                "agree",
-            ),
-            auth(
-                91400005,
-                "Seminole Tribe of Florida v. Florida",
-                "517 U.S. 44",
-                "Cited by",
-                "II",
-                "as Seminole Tribe held",
-                "Standard cite.",
-                "agree",
-            ),
-            auth(
-                91400006,
-                "United States v. Lara",
-                "541 U.S. 193",
-                "Cited by",
-                "II",
-                "Lara reaffirms the principle",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91400007,
-                "Montana v. United States",
-                "450 U.S. 544",
-                "Distinguished by",
-                "II",
-                "Montana's reasoning does not control",
-                "Court distinguishing.",
-                "disagree",
-                "Cited by",
-            ),
-            auth(
-                91400008,
-                "Strate v. A-1 Contractors",
-                "520 U.S. 438",
-                "Cited by",
-                "II",
-                "Strate is on point",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91400009,
-                "Atkinson Trading Co. v. Shirley",
-                "532 U.S. 645",
-                "Vacated and remanded by",
-                "III",
-                "the trial court's reading of Atkinson cannot stand",
-                "Court vacating prior reasoning.",
-                "agree",
-            ),
-            auth(
-                91400010,
-                "United States v. Wheeler",
-                "435 U.S. 313",
-                "Cited by",
-                "II",
-                "as Wheeler observed",
-                "Standard cite.",
-                "unverified",
-            ),
-        ],
-        "cited_by": [
-            cb(
-                91500001,
-                "Mashantucket Pequot Tribe v. Connecticut",
-                "913 F.3d 167",
-                "ca2",
-                "2019-01-22",
-                "Cited by",
-                "Narragansett Indian instructs",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                91500002,
-                "Tribe v. State of Maine",
-                "677 F. Supp. 2d 211",
-                "dist",
-                "2010-04-30",
-                "Distinguished by",
-                "Narragansett's analysis does not extend here",
-                "Court distinguishing.",
-                "agree",
-            ),
-            cb(
-                91500003,
-                "United States v. Doe",
-                "812 F.3d 911",
-                "ca1",
-                "2016-02-15",
-                "Cited by",
-                "consistent with Narragansett",
-                "Standard cite.",
-                "unverified",
-            ),
-        ],
-    },
-    {
-        "cluster_id": 622781,
-        "case_name": "Sanchez ex rel. DR-S. v. United States",
-        "citations": ["671 F.3d 86"],
-        "court": "ca1",
-        "date_filed": "2012-01-04",
-        "document_text": """## I
+At the time of the federal trial, high court precedent required the trial court first to decide whether Sanchez had violated Hernandez's constitutional rights, and then to decide the immunity question — <citedCase data-cluster-id="118449">Saucier v. Katz</citedCase> (2001) 533 U.S. 194, 201. The high court recently changed this rule, holding that trial courts may decide the immunity question before (or without) determining whether there was a constitutional violation — <citedCase data-cluster-id="145918">Pearson v. Callahan</citedCase> (2009) 555 U.S. ___.
 
-Plaintiff brings a Federal Tort Claims Act suit alleging negligent supervision by federal officials.
+## III
+
+Sanchez then moved for judgment as a matter of law, based on qualified immunity. The court granted the motion, finding that because Sanchez's "use of deadly force was reasonable under the circumstances," he "did not violate Hernandez's Fourth Amendment rights." In <citedCase data-cluster-id="2219834">Martinez v. City of Schenectady</citedCase>, the New York Court of Appeals confronted a similar preclusion question and declined to extend the state constitutional tort remedy where federal courts had already resolved the underlying §1983 claim on qualified-immunity grounds. We hold that the trial court did not err in entering judgment for defendants. We therefore reverse the Court of Appeal's judgment and remand the matter with directions to reinstate the trial court's judgment."""
+
+
+D_UTAH_CALLAHAN_BODY = """## I
+
+This is a civil-rights action brought under 42 U.S.C. §1983 by plaintiff Afton Callahan against officers of the Central Utah Narcotics Task Force, who entered his residence on March 19, 2002 incident to a controlled drug buy by a confidential informant. Plaintiff alleges that the officers' warrantless entry, predicated on the "consent-once-removed" doctrine, violated his Fourth Amendment rights.
 
 ## II
 
-The discretionary function exception to the FTCA bars suits based on agency policy choices. See <citedCase data-cluster-id="91600001">United States v. Gaubert</citedCase>. Issue preclusion as articulated in <citedCase data-cluster-id="110360">Allen v. McCurry</citedCase> is inapposite here.""",
-        "authorities": [
-            auth(
-                91600001,
-                "United States v. Gaubert",
-                "499 U.S. 315",
-                "Cited by",
-                "II",
-                "Gaubert's two-step analysis governs",
-                "Foundational cite.",
-                "agree",
-            ),
-            auth(
-                110360,
-                "Allen v. McCurry",
-                "449 U.S. 90",
-                "Distinguished by",
-                "II",
-                "Allen v. McCurry's reasoning is inapposite here",
-                "Cross-reference within scoped set.",
-                "agree",
-            ),
-            auth(
-                91600002,
-                "Berkovitz v. United States",
-                "486 U.S. 531",
-                "Cited by",
-                "II",
-                "Berkovitz's two-step framework",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91600003,
-                "Indian Towing Co. v. United States",
-                "350 U.S. 61",
-                "Cited by",
-                "II",
-                "as Indian Towing held",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91600004,
-                "United States v. S.A. Empresa de Viacao Aerea Rio Grandense",
-                "467 U.S. 797",
-                "Cited by",
-                "II",
-                "Varig Airlines confirms",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91600005,
-                "Dalehite v. United States",
-                "346 U.S. 15",
-                "Distinguished by",
-                "II",
-                "Dalehite's facts are distinguishable",
-                "Court distinguishing.",
-                "agree",
-            ),
-            auth(
-                91600006,
-                "Federal Tort Claims Act § 2680(a)",
-                "28 U.S.C. § 2680(a)",
-                "Cited by",
-                "II",
-                "as the statute provides",
-                "Statutory cite.",
-                "unverified",
-            ),
-            auth(
-                91600007,
-                "Bivens v. Six Unknown Named Agents",
-                "403 U.S. 388",
-                "Cited by",
-                "II",
-                "see Bivens for the alternative remedy",
-                "Tangential.",
-                "unverified",
-            ),
-            auth(
-                91600008,
-                "Westfall v. Erwin",
-                "484 U.S. 292",
-                "Cited by",
-                "I",
-                "as Westfall recognized",
-                "Background.",
-                "unverified",
-            ),
-        ],
-        "cited_by": [
-            cb(
-                91700001,
-                "Lopez-Garcia v. United States",
-                "923 F.3d 144",
-                "ca1",
-                "2019-04-15",
-                "Cited by",
-                "Sanchez instructs",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                91700002,
-                "Doe v. United States",
-                "452 F. Supp. 3d 89",
-                "dist",
-                "2020-04-08",
-                "Cited by",
-                "as Sanchez held",
-                "Standard cite.",
-                "unverified",
-            ),
-        ],
-    },
-    {
-        "cluster_id": 1254,
-        "case_name": "Chamberlin v. Town of Stoughton",
-        "citations": ["601 F.3d 25"],
-        "court": "ca1",
-        "date_filed": "2010-04-01",
-        "document_text": """## I
+Defendants move for summary judgment on the basis of qualified immunity. The applicable framework is the two-step inquiry set out by the Supreme Court in <citedCase data-cluster-id="118449">Saucier v. Katz</citedCase>, 533 U.S. 194 (2001), governed in this Circuit by the gloss our Court of Appeals applied in earlier cases. Under that framework the Court must first ask whether the facts alleged make out a constitutional violation; only if so does the Court reach the "clearly established" prong.
 
-Plaintiff brings a § 1983 claim alleging First Amendment retaliation by municipal officials following her public criticism of town policy.
+## III
 
-## II
+For the reasons set forth in our analysis above, the Court concludes that defendants' warrantless entry, when measured against the contours of the consent-once-removed doctrine as applied in this Circuit, did not violate clearly established law of which a reasonable officer would have been aware. Defendants' motion for summary judgment is GRANTED. The case is dismissed."""
 
-The standard for First Amendment retaliation requires a showing that protected speech was a substantial factor in the adverse action. See <citedCase data-cluster-id="91800001">Mt. Healthy City School District v. Doyle</citedCase>.""",
-        "authorities": [
-            auth(
-                91800001,
-                "Mt. Healthy City School District v. Doyle",
-                "429 U.S. 274",
-                "Cited by",
-                "II",
-                "the Mt. Healthy framework",
-                "Foundational cite.",
-                "agree",
-            ),
-            auth(
-                91800002,
-                "Pickering v. Board of Education",
-                "391 U.S. 563",
-                "Cited by",
-                "II",
-                "Pickering's balancing test",
-                "Standard cite.",
-                "agree",
-            ),
-            auth(
-                91800003,
-                "Garcetti v. Ceballos",
-                "547 U.S. 410",
-                "Cited by",
-                "II",
-                "as Garcetti instructs",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91800004,
-                "Connick v. Myers",
-                "461 U.S. 138",
-                "Cited by",
-                "II",
-                "Connick's matter-of-public-concern analysis",
-                "Standard cite.",
-                "agree",
-            ),
-            auth(
-                91800005,
-                "Hartman v. Moore",
-                "547 U.S. 250",
-                "Distinguished by",
-                "II",
-                "Hartman concerned retaliatory prosecution, not at issue here",
-                "Court distinguishing.",
-                "disagree",
-                "Cited by",
-            ),
-            auth(
-                91800006,
-                "Crawford-El v. Britton",
-                "523 U.S. 574",
-                "Cited by",
-                "I",
-                "as Crawford-El held",
-                "Tangential.",
-                "unverified",
-            ),
-            auth(
-                91800007,
-                "Saucier v. Katz",
-                "533 U.S. 194",
-                "Cited by",
-                "II",
-                "the qualified immunity analysis under Saucier",
-                "Standard cite.",
-                "unverified",
-            ),
-            auth(
-                91800008,
-                "Pearson v. Callahan",
-                "555 U.S. 223",
-                "Cited by",
-                "II",
-                "as Pearson clarified",
-                "Standard cite.",
-                "unverified",
-            ),
-        ],
-        "cited_by": [
-            cb(
-                91900001,
-                "Smith v. Town of Hudson",
-                "812 F.3d 144",
-                "ca1",
-                "2016-02-09",
-                "Cited by",
-                "Chamberlin's reasoning controls",
-                "Standard cite.",
-                "unverified",
-            ),
-            cb(
-                91900002,
-                "Doe v. City of Boston",
-                "452 F. Supp. 3d 401",
-                "dist",
-                "2020-04-15",
-                "Distinguished by",
-                "Chamberlin's facts are distinguishable",
-                "Court distinguishing.",
-                "agree",
-            ),
-            cb(
-                91900003,
-                "Brown v. Town of Brookline",
-                "923 F.3d 211",
-                "ca1",
-                "2019-05-22",
-                "Cited by",
-                "consistent with Chamberlin",
-                "Standard cite.",
-                "unverified",
-            ),
-        ],
-    },
+
+# ── Scoped opinions ────────────────────────────────────────────────────
+SCOPED_OPINIONS = [
+    opinion(
+        cluster_id=145918,
+        case_name="Pearson v. Callahan",
+        docket_number="07-751",
+        citations=["555 U.S. 223", "129 S. Ct. 808", "172 L. Ed. 2d 565"],
+        court="scotus",
+        date_filed="2009-01-21",
+        document_text=PEARSON_BODY,
+    ),
+    opinion(
+        cluster_id=118449,
+        case_name="Saucier v. Katz",
+        docket_number="99-1977",
+        citations=["533 U.S. 194", "121 S. Ct. 2151", "150 L. Ed. 2d 272"],
+        court="scotus",
+        date_filed="2001-06-18",
+        document_text=SAUCIER_BODY,
+    ),
+    opinion(
+        cluster_id=110763,
+        case_name="Harlow v. Fitzgerald",
+        docket_number="80-945",
+        citations=["457 U.S. 800", "102 S. Ct. 2727", "73 L. Ed. 2d 396"],
+        court="scotus",
+        date_filed="1982-06-24",
+        document_text=HARLOW_BODY,
+    ),
+    opinion(
+        cluster_id=1425860,
+        case_name="Callahan v. Millard County",
+        docket_number="06-4135",
+        citations=["494 F.3d 891"],
+        court="ca10",
+        date_filed="2007-07-16",
+        document_text=CALLAHAN_10TH_BODY,
+    ),
+    opinion(
+        cluster_id=220962,
+        case_name="Henry v. Purnell",
+        docket_number="08-7433",
+        citations=["652 F.3d 524"],
+        court="ca4",
+        date_filed="2011-07-14",
+        document_text=HENRY_BODY,
+    ),
+    opinion(
+        cluster_id=203857,
+        case_name="Maldonado v. Fontanes",
+        docket_number="08-2211",
+        citations=["568 F.3d 263"],
+        court="ca1",
+        date_filed="2009-06-04",
+        document_text=MALDONADO_BODY,
+    ),
+    opinion(
+        cluster_id=807646,
+        case_name="Lacey v. Arpaio",
+        docket_number="09-15703",
+        citations=["693 F.3d 896"],
+        court="ca9",
+        date_filed="2012-08-29",
+        document_text=LACEY_BODY,
+    ),
+    opinion(
+        cluster_id=2219834,
+        case_name="Martinez v. City of Schenectady",
+        docket_number="N/A",
+        citations=["97 N.Y.2d 78", "761 N.E.2d 560", "735 N.Y.S.2d 868"],
+        court="ny",
+        date_filed="2001-11-19",
+        document_text=MARTINEZ_BODY,
+    ),
+    opinion(
+        cluster_id=1801687,
+        case_name="Hernandez v. City of Pomona",
+        docket_number="S149499",
+        citations=["46 Cal. 4th 501", "207 P.3d 506", "94 Cal. Rptr. 3d 1"],
+        court="cal",
+        date_filed="2009-05-28",
+        document_text=HERNANDEZ_POMONA_BODY,
+    ),
+    opinion(
+        cluster_id=9999001,
+        case_name="Callahan v. Millard County Sheriff",
+        docket_number="2:05-cv-00170",
+        citations=["No. 2:05-cv-00170 (D. Utah 2005)"],
+        court="utd",
+        date_filed="2005-09-14",
+        document_text=D_UTAH_CALLAHAN_BODY,
+    ),
 ]
 
 
-def get_court_display(court_id: str) -> str:
-    """Return human-readable court name."""
-    return COURT_DISPLAY.get(court_id, court_id)
+# ── External (non-scoped) opinions ─────────────────────────────────────
+# Stand-in records for citing or cited cases that aren't in the demo's 10.
+# Referenced by EDGES; surfaced in cited_by[] / authorities[] views.
+EXTERNAL_OPINIONS = {
+    # Fabricated non-scoped SCOTUS that affirmed Henry v. Purnell
+    9999002: external_op(
+        9999002,
+        "Purnell v. Henry",
+        "12-345",
+        ["568 U.S. 901"],
+        "scotus",
+        "2012-10-15",
+    ),
+    # Citing references to Pearson (post-2009 cases)
+    9100201: external_op(
+        9100201,
+        "Reichle v. Howards",
+        "11-262",
+        ["566 U.S. 658"],
+        "scotus",
+        "2012-06-04",
+    ),
+    9100202: external_op(
+        9100202,
+        "Plumhoff v. Rickard",
+        "12-1117",
+        ["572 U.S. 765"],
+        "scotus",
+        "2014-05-27",
+    ),
+    9100203: external_op(
+        9100203,
+        "Mullenix v. Luna",
+        "14-1143",
+        ["577 U.S. 7"],
+        "scotus",
+        "2015-11-09",
+    ),
+    9100204: external_op(
+        9100204,
+        "Hernandez v. Mesa",
+        "17-1678",
+        ["589 U.S. ___"],
+        "scotus",
+        "2020-02-25",
+    ),
+    # Citing references to Saucier
+    9100205: external_op(
+        9100205,
+        "Brosseau v. Haugen",
+        "03-1261",
+        ["543 U.S. 194"],
+        "scotus",
+        "2004-12-13",
+    ),
+    9100206: external_op(
+        9100206,
+        "Scott v. Harris",
+        "05-1631",
+        ["550 U.S. 372"],
+        "scotus",
+        "2007-04-30",
+    ),
+    # Citing references to Harlow
+    9100207: external_op(
+        9100207,
+        "Anderson v. Creighton",
+        "85-1520",
+        ["483 U.S. 635"],
+        "scotus",
+        "1987-06-25",
+    ),
+    9100208: external_op(
+        9100208,
+        "Wilson v. Layne",
+        "98-83",
+        ["526 U.S. 603"],
+        "scotus",
+        "1999-05-24",
+    ),
+    # District court below Henry (Maryland district)
+    9100210: external_op(
+        9100210,
+        "Henry v. Purnell (D. Md.)",
+        "04-cv-00342",
+        ["No. JKB-04-342 (D. Md. 2008)"],
+        "dist",
+        "2008-09-23",
+    ),
+    # District court below Maldonado (D.P.R.)
+    9100211: external_op(
+        9100211,
+        "Maldonado v. Fontanes (D.P.R.)",
+        "07-cv-01711",
+        ["No. 07-1711 (D.P.R. 2008)"],
+        "dist",
+        "2008-11-12",
+    ),
+    # District court below Lacey (D. Ariz.)
+    9100212: external_op(
+        9100212,
+        "Lacey v. Arpaio (D. Ariz.)",
+        "08-cv-01457",
+        ["No. CV-08-1457 (D. Ariz. 2010)"],
+        "dist",
+        "2010-12-08",
+    ),
+    # State-court citing references for Martinez and Hernandez Pomona
+    9100213: external_op(
+        9100213,
+        "Hartman v. State",
+        "98-CC-12345",
+        ["8 N.Y.3d 542"],
+        "ny",
+        "2007-05-08",
+    ),
+    9100214: external_op(
+        9100214,
+        "Robinson v. County of Los Angeles",
+        "S180404",
+        ["50 Cal. 4th 1078"],
+        "cal",
+        "2010-08-12",
+    ),
+    # An older case A questioned by another scoped case (for "as recognized by")
+    9920001: external_op(
+        9920001,
+        "Brown v. State of New York",
+        "BRN-1996",
+        ["89 N.Y.2d 172", "674 N.E.2d 1129"],
+        "ny",
+        "1996-11-19",
+    ),
+    # District court that cites Pearson heavily — populate cited_by
+    9920003: external_op(
+        9920003,
+        "Doe v. City of Boston",
+        "11-cv-12011",
+        ["No. 11-12011 (D. Mass. 2014)"],
+        "dist",
+        "2014-03-19",
+    ),
+    9920004: external_op(
+        9920004,
+        "Roe v. Phoenix Police Dept.",
+        "13-cv-00214",
+        ["No. CV-13-0214 (D. Ariz. 2015)"],
+        "dist",
+        "2015-08-20",
+    ),
+    # ── Citing references for the lower-court opinions ─────────────────
+    # Cited by Callahan v. Millard County (10th Cir. 2007)
+    9920010: external_op(
+        9920010,
+        "Saavedra v. Murphy",
+        "13-4022",
+        ["739 F.3d 1273"],
+        "ca10",
+        "2014-01-21",
+    ),
+    9920011: external_op(
+        9920011,
+        "Romero v. Story",
+        "11-2157",
+        ["672 F.3d 880"],
+        "ca10",
+        "2012-03-12",
+    ),
+    9920012: external_op(
+        9920012,
+        "Yang v. Boulder Police Dept.",
+        "16-cv-00821",
+        ["No. 16-cv-821 (D. Colo. 2018)"],
+        "dist",
+        "2018-04-30",
+    ),
+    9920013: external_op(
+        9920013,
+        "Bishop v. Hackel",
+        "10-1335",
+        ["636 F.3d 757"],
+        "ca6",
+        "2011-03-21",
+    ),
+    9920014: external_op(
+        9920014,
+        "Riggs v. Carbon County",
+        "18-4031",
+        ["920 F.3d 752"],
+        "ca10",
+        "2019-03-19",
+    ),
+    # Cited by Henry v. Purnell (4th Cir. 2011 en banc)
+    9920020: external_op(
+        9920020,
+        "Estate of Armstrong v. Pinehurst",
+        "15-1191",
+        ["810 F.3d 892"],
+        "ca4",
+        "2016-01-11",
+    ),
+    9920021: external_op(
+        9920021,
+        "Wilson v. Prince George's County",
+        "16-2052",
+        ["893 F.3d 213"],
+        "ca4",
+        "2018-06-21",
+    ),
+    9920022: external_op(
+        9920022,
+        "Pollard v. Maryland State Police",
+        "14-cv-02314",
+        ["No. JKB-14-2314 (D. Md. 2017)"],
+        "dist",
+        "2017-09-12",
+    ),
+    9920023: external_op(
+        9920023,
+        "Anderson v. NYC Police Dept.",
+        "12-3450",
+        ["705 F.3d 65"],
+        "ca2",
+        "2013-04-22",
+    ),
+    9920024: external_op(
+        9920024,
+        "Mayfield v. Roanoke County",
+        "12-1772",
+        ["723 F.3d 433"],
+        "ca4",
+        "2013-07-15",
+    ),
+    # Cited by Maldonado v. Fontanes (1st Cir. 2009)
+    9920030: external_op(
+        9920030,
+        "Pearson Educ., Inc. v. Liu",
+        "11-cv-12345",
+        ["No. 11-12345 (D.P.R. 2013)"],
+        "dist",
+        "2013-06-18",
+    ),
+    9920031: external_op(
+        9920031,
+        "Garcia v. Municipality of Carolina",
+        "12-1456",
+        ["692 F.3d 7"],
+        "ca1",
+        "2012-09-04",
+    ),
+    9920032: external_op(
+        9920032,
+        "Estrada v. Rhode Island",
+        "16-1567",
+        ["832 F.3d 39"],
+        "ca1",
+        "2016-08-15",
+    ),
+    # Cited by Lacey v. Arpaio (9th Cir. 2012 en banc)
+    9920040: external_op(
+        9920040,
+        "Ballentine v. Tucker",
+        "16-15672",
+        ["881 F.3d 597"],
+        "ca9",
+        "2018-01-08",
+    ),
+    9920041: external_op(
+        9920041,
+        "Skoog v. County of Clackamas",
+        "13-35451",
+        ["744 F.3d 1198"],
+        "ca9",
+        "2014-03-21",
+    ),
+    9920042: external_op(
+        9920042,
+        "Doe v. Maricopa County",
+        "15-cv-00789",
+        ["No. CV-15-789 (D. Ariz. 2017)"],
+        "dist",
+        "2017-11-04",
+    ),
+    # Cited by Hernandez v. City of Pomona (Cal. 2009)
+    9920050: external_op(
+        9920050,
+        "Hayes v. County of San Diego",
+        "S193997",
+        ["57 Cal. 4th 622"],
+        "cal",
+        "2013-08-19",
+    ),
+    9920051: external_op(
+        9920051,
+        "Adams v. City of Fremont",
+        "A123456",
+        ["68 Cal. App. 4th 243"],
+        "cal",
+        "2012-05-14",
+    ),
+    # Cited by Martinez v. City of Schenectady (NY 2001)
+    9920060: external_op(
+        9920060,
+        "Lyles v. State",
+        "OD-2009-12",
+        ["13 N.Y.3d 312"],
+        "ny",
+        "2009-10-22",
+    ),
+    9920061: external_op(
+        9920061,
+        "Williams v. State of New York",
+        "OD-2014-04",
+        ["22 N.Y.3d 423"],
+        "ny",
+        "2014-04-29",
+    ),
+    # Cited by D. Utah Callahan (fictional, 2005)
+    9920070: external_op(
+        9920070,
+        "Walker v. Salt Lake City",
+        "08-cv-00567",
+        ["No. 2:08-cv-00567 (D. Utah 2010)"],
+        "utd",
+        "2010-07-15",
+    ),
+    9920071: external_op(
+        9920071,
+        "Reed v. Cottonwood Heights",
+        "11-cv-00123",
+        ["No. 2:11-cv-00123 (D. Utah 2013)"],
+        "utd",
+        "2013-02-19",
+    ),
+}
+
+
+# ── EDGES — single source of truth for treatment relationships ─────────
+# Each edge says: citing cluster applied `treatment` to cited cluster.
+# build_data.py expands these into per-opinion authorities[] / cited_by[]
+# views.
+EDGES = [
+    # ── Direct History: 10th Cir. Callahan -> D. Utah Callahan -- AFFIRMED
+    edge(
+        citing_cluster_id=1425860,
+        cited_cluster_id=9999001,
+        treatment="Affirmed by",
+        quote="Holding that the district court was correct in its determination that Mr. Callahan's constitutional rights were violated",
+        rationale="Direct procedural history: 10th Cir. affirmed lower court's constitutional-violation finding (reversed only on the clearly-established prong).",
+        section_context="Holding that the district court was correct in its determination that Mr. Callahan's constitutional rights were violated, but incorrect in its determination that these rights were not clearly established, we reverse in part and remand.",
+        source="expert",
+    ),
+    # ── Direct History: Pearson -> Callahan-10th -- REVERSED
+    edge(
+        citing_cluster_id=145918,
+        cited_cluster_id=1425860,
+        treatment="Reversed by",
+        quote="we reverse and remand for further proceedings consistent with this opinion",
+        rationale="Direct procedural history: SCOTUS reversed 10th Cir. denial of QI.",
+        section_context="On appeal, a divided panel of the Tenth Circuit held that petitioners' conduct violated respondent's Fourth Amendment rights. Callahan v. Millard Cty., 494 F. 3d 891 (2007). For the reasons set forth above, we reverse and remand for further proceedings consistent with this opinion.",
+        source="expert",
+    ),
+    # ── Direct History: Fabricated SCOTUS affirmance of Henry v. Purnell
+    edge(
+        citing_cluster_id=9999002,
+        cited_cluster_id=220962,
+        treatment="Affirmed by",
+        quote="the judgment of the Court of Appeals is affirmed",
+        rationale="Direct procedural history: SCOTUS (mock) affirmed 4th Cir. en banc denial of QI.",
+        section_context="On the question presented, the judgment of the Court of Appeals is affirmed. The officer's use of deadly force violated clearly established law.",
+        source="model",
+    ),
+    # ── Pearson modifies Saucier (self court_relationship)
+    edge(
+        citing_cluster_id=145918,
+        cited_cluster_id=118449,
+        treatment="Limited by",
+        quote="the Saucier procedure should not be regarded as an inflexible requirement",
+        rationale="Pearson held Saucier's mandatory two-step ordering is no longer required.",
+        section_context="We now hold that the Saucier procedure should not be regarded as an inflexible requirement and that petitioners are entitled to qualified immunity on the ground that it was not clearly established at the time of the search that their conduct was unconstitutional. We therefore reverse.",
+        source="expert",
+    ),
+    # ── Pearson cites Harlow
+    edge(
+        citing_cluster_id=145918,
+        cited_cluster_id=110763,
+        treatment="Cited by",
+        quote="The doctrine of qualified immunity protects government officials",
+        rationale="Pearson cites Harlow for the canonical QI standard.",
+        section_context='The doctrine of qualified immunity protects government officials "from liability for civil damages insofar as their conduct does not violate clearly established statutory or constitutional rights of which a reasonable person would have known." Harlow v. Fitzgerald, 457 U. S. 800, 818 (1982).',
+        source="model",
+    ),
+    # ── Saucier cites Harlow
+    edge(
+        citing_cluster_id=118449,
+        cited_cluster_id=110763,
+        treatment="Cited by",
+        quote="avoid excessive disruption of government and permit the resolution of many insubstantial claims on summary judgment",
+        rationale="Saucier cites Harlow's policy rationale.",
+        section_context='The approach the Court of Appeals adopted could undermine the goal of qualified immunity to "avoid excessive disruption of government and permit the resolution of many insubstantial claims on summary judgment." Harlow v. Fitzgerald, 457 U. S. 800, 818 (1982).',
+        source="model",
+    ),
+    # ── Callahan-10th cites Saucier (applies the two-step)
+    edge(
+        citing_cluster_id=1425860,
+        cited_cluster_id=118449,
+        treatment="Cited by",
+        quote="If no constitutional right would have been violated were the allegations established",
+        rationale="10th Cir. applies Saucier's mandatory two-step.",
+        section_context="If no constitutional right would have been violated were the allegations established, there is no necessity for further inquiries concerning qualified immunity — quoting Saucier v. Katz, 533 U.S. 194, 201 (2001). If the plaintiff establishes that a constitutional right was violated, then the plaintiff must also show that the violated right was clearly established.",
+        source="model",
+    ),
+    # ── D. Utah Callahan cites Saucier
+    edge(
+        citing_cluster_id=9999001,
+        cited_cluster_id=118449,
+        treatment="Cited by",
+        quote="the two-step inquiry set out by the Supreme Court",
+        rationale="District court applies Saucier's two-step.",
+        section_context="The applicable framework is the two-step inquiry set out by the Supreme Court in Saucier v. Katz, 533 U.S. 194 (2001), governed in this Circuit by the gloss our Court of Appeals applied in earlier cases.",
+        source="model",
+    ),
+    # ── Henry v. Purnell cites Saucier (recognizing modification by Pearson)
+    edge(
+        citing_cluster_id=220962,
+        cited_cluster_id=118449,
+        treatment="Limited as recognized by",
+        quote="Saucier v. Katz, 533 U.S. 194, 206 (2001), overruled in part",
+        rationale='Henry recognizes Pearson modified Saucier ("as recognized by" / Related Reference).',
+        section_context="Saucier v. Katz, 533 U.S. 194, 206 (2001), overruled in part, Pearson v. Callahan, 129 S. Ct. 808 (2009). Following the Supreme Court's recent decision in Pearson, we exercise our discretion to use the two-step procedure of Saucier.",
+        source="expert",
+    ),
+    # ── Henry v. Purnell cites Pearson (the case that modified Saucier)
+    edge(
+        citing_cluster_id=220962,
+        cited_cluster_id=145918,
+        treatment="Cited by",
+        quote="Following the Supreme Court's recent decision in Pearson",
+        rationale="Henry cites Pearson as the modifying authority.",
+        section_context="Following the Supreme Court's recent decision in Pearson, we exercise our discretion to use the two-step procedure of Saucier, that asks first whether a constitutional violation occurred and second whether the right violated was clearly established.",
+        source="model",
+    ),
+    # ── Henry cites Harlow
+    edge(
+        citing_cluster_id=220962,
+        cited_cluster_id=110763,
+        treatment="Cited by",
+        quote="a test that focuses on the objective legal reasonableness",
+        rationale="Henry cites Harlow's objective-reasonableness articulation.",
+        section_context='The second prong is "a test that focuses on the objective legal reasonableness of an official\'s acts." Harlow v. Fitzgerald, 457 U.S. 800, 819 (1982).',
+        source="model",
+    ),
+    # ── Maldonado cites Pearson
+    edge(
+        citing_cluster_id=203857,
+        cited_cluster_id=145918,
+        treatment="Cited by",
+        quote="Pearson also held that while it is frequently appropriate for courts to answer each step in turn, it is not mandatory",
+        rationale="Maldonado applies Pearson's permissive sequencing rule.",
+        section_context="Pearson also held that while it is frequently appropriate for courts to answer each step in turn, it is not mandatory that courts follow the two-step analysis sequentially. Courts have discretion to decide whether, on the facts of a particular case, it is worthwhile to address first whether the facts alleged make out a violation of a constitutional right.",
+        source="model",
+    ),
+    # ── Maldonado cites Saucier
+    edge(
+        citing_cluster_id=203857,
+        cited_cluster_id=118449,
+        treatment="Cited by",
+        quote="the salient question is whether the state of the law at the time of the alleged violation gave the defendant fair warning",
+        rationale="Maldonado cites Saucier's clearly-established formulation.",
+        section_context="The relevant, dispositive inquiry in determining whether a right is clearly established is whether it would be clear to a reasonable officer that his conduct was unlawful in the situation he confronted — quoting Saucier v. Katz, 533 U.S. at 202.",
+        source="model",
+        expert_treatment="Distinguished by",
+    ),
+    # ── Lacey cites Pearson
+    edge(
+        citing_cluster_id=807646,
+        cited_cluster_id=145918,
+        treatment="Cited by",
+        quote="We have the discretion to decide which of the two prongs of the qualified immunity analysis should be addressed first",
+        rationale="Lacey applies Pearson's discretionary ordering rule.",
+        section_context="We have the discretion to decide which of the two prongs of the qualified immunity analysis should be addressed first in light of the circumstances in the particular case at hand. Pearson, 555 U.S. at 236.",
+        source="model",
+    ),
+    # ── Lacey cites Saucier
+    edge(
+        citing_cluster_id=807646,
+        cited_cluster_id=118449,
+        treatment="Cited by",
+        quote="we ask whether the facts alleged show the officer's conduct violated a constitutional right",
+        rationale="Lacey applies Saucier's first prong.",
+        section_context="Determining whether a defendant is entitled to qualified immunity involves a two-pronged analysis. First, we ask whether the facts alleged show the officer's conduct violated a constitutional right — Saucier v. Katz, 533 U.S. 194, 201 (2001), overruled in part by Pearson, 555 U.S. at 235–236.",
+        source="model",
+    ),
+    # ── Lacey cites Harlow
+    edge(
+        citing_cluster_id=807646,
+        cited_cluster_id=110763,
+        treatment="Cited by",
+        quote='Qualified immunity "represents the norm" for government officials',
+        rationale="Lacey cites Harlow as foundational QI authority.",
+        section_context='Qualified immunity "represents the norm" for government officials exercising discretionary authority, Harlow v. Fitzgerald, 457 U.S. 800, 807 (1982), including prosecutors who are not acting as an advocate for the state and may not be entitled to absolute immunity.',
+        source="model",
+    ),
+    # ── Sister-circuit edge: Lacey distinguishes Maldonado
+    edge(
+        citing_cluster_id=807646,
+        cited_cluster_id=203857,
+        treatment="Distinguished by",
+        quote="The First Circuit's analysis in Maldonado v. Fontanes addressed substantive due process claims",
+        rationale="Sister-circuit (horizontal_persuasive) — Lacey distinguishes Maldonado on factual posture.",
+        section_context="The First Circuit's analysis in Maldonado v. Fontanes addressed substantive due process claims with no allegation of First Amendment retaliation. Here, Lacey's claims are anchored in retaliation for newsgathering, a context Maldonado did not consider.",
+        source="model",
+    ),
+    # ── Martinez (NY) cites Saucier
+    edge(
+        citing_cluster_id=2219834,
+        cited_cluster_id=118449,
+        treatment="Cited by",
+        quote="qualified immunity barred the assertion of the section 1983 claims",
+        rationale="NY Court of Appeals notes federal QI ruling.",
+        section_context="The United States Court of Appeals for the Second Circuit reversed the denial of defendants' summary judgment motion, concluding as a matter of law that qualified immunity barred the assertion of the section 1983 claims against the police officers, applying the framework set out by the Supreme Court in Saucier v. Katz.",
+        source="model",
+    ),
+    # ── Martinez (NY) cites Brown v. State of New York (Questioned)
+    edge(
+        citing_cluster_id=2219834,
+        cited_cluster_id=9920001,
+        treatment="Distinguished by",
+        quote='the "narrow remedy" established in Brown v. State of New York cannot be stretched',
+        rationale="Martinez distinguishes Brown's state-constitutional tort remedy.",
+        section_context='We agree with Supreme Court and the Appellate Division that the "narrow remedy" established in Brown v. State of New York (89 NY2d 172, 192 [1996]) cannot be stretched to fit the facts before us.',
+        source="model",
+    ),
+    # ── Hernandez Pomona (CA) cites Saucier
+    edge(
+        citing_cluster_id=1801687,
+        cited_cluster_id=118449,
+        treatment="Cited by",
+        quote="high court precedent required the trial court first to decide whether Sanchez had violated Hernandez's constitutional rights",
+        rationale="Cal. Sup. Ct. notes Saucier's mandatory ordering at the time of trial.",
+        section_context="At the time of the federal trial, high court precedent required the trial court first to decide whether Sanchez had violated Hernandez's constitutional rights, and then to decide the immunity question — Saucier v. Katz (2001) 533 U.S. 194, 201.",
+        source="model",
+    ),
+    # ── Hernandez Pomona (CA) cites Pearson
+    edge(
+        citing_cluster_id=1801687,
+        cited_cluster_id=145918,
+        treatment="Cited by",
+        quote="The high court recently changed this rule, holding that trial courts may decide the immunity question",
+        rationale="Cal. Sup. Ct. acknowledges Pearson's change to the ordering rule.",
+        section_context="The high court recently changed this rule, holding that trial courts may decide the immunity question before (or without) determining whether there was a constitutional violation — Pearson v. Callahan (2009) 555 U.S. ___.",
+        source="expert",
+    ),
+    # ── Sister-state edge: Hernandez Pomona cites Martinez
+    edge(
+        citing_cluster_id=1801687,
+        cited_cluster_id=2219834,
+        treatment="Cited by",
+        quote="the New York Court of Appeals confronted a similar preclusion question",
+        rationale="Sister-state (horizontal_persuasive) — Cal. Sup. Ct. cites NY Court of Appeals as persuasive authority on §1983 preclusion.",
+        section_context="In Martinez v. City of Schenectady, 97 N.Y.2d 78 (2001), the New York Court of Appeals confronted a similar preclusion question and declined to extend the state constitutional tort remedy where federal courts had already resolved the underlying §1983 claim on qualified-immunity grounds.",
+        source="model",
+    ),
+    # ── External edges — non-scoped citing/cited cases (populate cited_by)
+    # Reichle v. Howards cites Pearson
+    edge(
+        citing_cluster_id=9100201,
+        cited_cluster_id=145918,
+        treatment="Cited by",
+        quote="we follow the discretionary sequencing established in Pearson",
+        rationale="SCOTUS post-Pearson case applying its rule.",
+        section_context="In analyzing the qualified-immunity defense, we follow the discretionary sequencing established in Pearson v. Callahan, 555 U.S. 223 (2009), which permits us to address the clearly-established prong without first deciding the constitutional question.",
+        source="model",
+    ),
+    # Plumhoff cites Saucier
+    edge(
+        citing_cluster_id=9100202,
+        cited_cluster_id=118449,
+        treatment="Cited by",
+        quote="we apply the two-step framework articulated in Saucier",
+        rationale="SCOTUS QI case applying Saucier framework.",
+        section_context="In addressing the officers' qualified-immunity defense, we apply the two-step framework articulated in Saucier v. Katz, 533 U.S. 194 (2001), as modified by Pearson v. Callahan.",
+        source="model",
+    ),
+    # Mullenix v. Luna criticizes the lower court's Pearson application
+    edge(
+        citing_cluster_id=9100203,
+        cited_cluster_id=145918,
+        treatment="Cited by",
+        quote="Pearson did not require the Fifth Circuit to address the constitutional question",
+        rationale="SCOTUS reverses 5th Cir. for not heeding Pearson's discretionary sequencing.",
+        section_context="Although Pearson did not require the Fifth Circuit to address the constitutional question, the lower court chose to do so and reached an erroneous conclusion. We need not address that error today.",
+        source="model",
+    ),
+    # Hernandez v. Mesa cites Pearson
+    edge(
+        citing_cluster_id=9100204,
+        cited_cluster_id=145918,
+        treatment="Cited by",
+        quote="our discretion to address either prong of the qualified-immunity inquiry first",
+        rationale="SCOTUS Bivens / cross-border shooting case applying Pearson sequencing.",
+        section_context="Consistent with Pearson v. Callahan, 555 U.S. 223 (2009), we exercise our discretion to address either prong of the qualified-immunity inquiry first.",
+        source="model",
+    ),
+    # Brosseau v. Haugen cites Saucier
+    edge(
+        citing_cluster_id=9100205,
+        cited_cluster_id=118449,
+        treatment="Cited by",
+        quote="the second step of the qualified immunity analysis must be undertaken in light of the specific context",
+        rationale="Pre-Pearson per-curiam SCOTUS case applying Saucier framework.",
+        section_context="As we explained in Saucier, the second step of the qualified immunity analysis must be undertaken in light of the specific context of the case, not as a broad general proposition.",
+        source="model",
+    ),
+    # Scott v. Harris cites Saucier
+    edge(
+        citing_cluster_id=9100206,
+        cited_cluster_id=118449,
+        treatment="Cited by",
+        quote="we follow the order of analysis Saucier prescribed",
+        rationale="SCOTUS pre-Pearson; mandatory two-step still good law at the time.",
+        section_context="In assessing qualified immunity, we follow the order of analysis Saucier prescribed: first whether a constitutional right would have been violated, and second whether the right was clearly established.",
+        source="model",
+    ),
+    # Anderson v. Creighton cites Harlow
+    edge(
+        citing_cluster_id=9100207,
+        cited_cluster_id=110763,
+        treatment="Cited by",
+        quote="The contours of the right must be sufficiently clear",
+        rationale="Anderson refines Harlow's clearly-established standard.",
+        section_context="The contours of the right must be sufficiently clear that a reasonable official would understand that what he is doing violates that right — extending Harlow v. Fitzgerald's articulation of the qualified-immunity inquiry.",
+        source="expert",
+    ),
+    # Wilson v. Layne cites Harlow
+    edge(
+        citing_cluster_id=9100208,
+        cited_cluster_id=110763,
+        treatment="Cited by",
+        quote="the clearly-established analysis is conducted by reference to existing precedent",
+        rationale="Wilson applies Harlow's clearly-established framework.",
+        section_context="As Harlow v. Fitzgerald instructs, the clearly-established analysis is conducted by reference to existing precedent at the time of the conduct.",
+        source="model",
+    ),
+    # Henry v. Purnell (4th Cir. en banc) reversed D. Md. district court
+    edge(
+        citing_cluster_id=220962,
+        cited_cluster_id=9100210,
+        treatment="Reversed by",
+        quote="we reverse and remand",
+        rationale="Direct history: 4th Cir. en banc reversed district court's grant of QI.",
+        section_context="The decision of the district court is REVERSED AND REMANDED. Purnell's use of deadly force against Henry was objectively unreasonable and violated clearly established law.",
+        source="expert",
+    ),
+    # Maldonado v. Fontanes (1st Cir.) affirmed D.P.R. denial of QI
+    edge(
+        citing_cluster_id=203857,
+        cited_cluster_id=9100211,
+        treatment="Affirmed by",
+        quote="We affirm the denial of the Mayor's motion for qualified immunity",
+        rationale="Direct history: 1st Cir. affirmed district court's denial of QI on Fourth Amendment / procedural due process claims.",
+        section_context="We affirm the denial of the Mayor's motion for qualified immunity on the Fourth Amendment and Fourteenth Amendment procedural due process claims, and reverse on the substantive due process claim.",
+        source="expert",
+    ),
+    # Lacey v. Arpaio (9th Cir. en banc) affirmed-in-part / reversed-in-part D. Ariz.
+    edge(
+        citing_cluster_id=807646,
+        cited_cluster_id=9100212,
+        treatment="Affirmed in part; Reversed in part by",
+        quote="We affirm in part and reverse in part",
+        rationale="Direct history: 9th Cir. en banc affirmed dismissal of some claims, reversed dismissal of others.",
+        section_context="We affirm in part and reverse in part, finding that Lacey adequately alleged several causes of action for which the defendants are not entitled to immunity. We remand for further proceedings.",
+        source="model",
+    ),
+    # Hartman v. State (NY) cites Martinez
+    edge(
+        citing_cluster_id=9100213,
+        cited_cluster_id=2219834,
+        treatment="Cited by",
+        quote="this Court declined in Martinez to extend the Brown remedy",
+        rationale="Later NY Court of Appeals case citing Martinez on state constitutional torts.",
+        section_context="As this Court declined in Martinez v. City of Schenectady to extend the Brown remedy where the underlying federal claim had been resolved on qualified-immunity grounds, we similarly decline here.",
+        source="model",
+    ),
+    # Robinson v. County of Los Angeles cites Hernandez Pomona
+    edge(
+        citing_cluster_id=9100214,
+        cited_cluster_id=1801687,
+        treatment="Cited by",
+        quote="our decision in Hernandez v. City of Pomona controls the preclusion analysis",
+        rationale="Later Cal. Sup. Ct. case applying Hernandez Pomona's preclusion holding.",
+        section_context="As we held in Hernandez v. City of Pomona, 46 Cal. 4th 501 (2009), our decision controls the preclusion analysis where the federal court has resolved the §1983 claim on qualified-immunity grounds.",
+        source="model",
+    ),
+    # Susag v. Lake Forest (Ca App) cites Hernandez Pomona — wait, this is pre-2009. Skip.
+    # Doe v. Boston cites Pearson
+    edge(
+        citing_cluster_id=9920003,
+        cited_cluster_id=145918,
+        treatment="Cited by",
+        quote="Pearson permits courts to bypass the constitutional-violation prong",
+        rationale="District court applies Pearson sequencing.",
+        section_context="Pearson v. Callahan permits courts to bypass the constitutional-violation prong and resolve the qualified-immunity defense on the clearly-established prong alone.",
+        source="model",
+    ),
+    # Roe v. Phoenix Police cites Lacey (intra-9th-Cir district application)
+    edge(
+        citing_cluster_id=9920004,
+        cited_cluster_id=807646,
+        treatment="Cited by",
+        quote="Lacey v. Arpaio is binding authority on First Amendment retaliation claims",
+        rationale="District court within 9th Cir. applies Lacey.",
+        section_context="In this Circuit, Lacey v. Arpaio is binding authority on First Amendment retaliation claims arising from law-enforcement conduct.",
+        source="model",
+        expert_treatment="Distinguished by",
+    ),
+    # ── Citing references TO lower-court opinions ─────────────────────
+    # These give the lower-court opinion pages enough non-direct
+    # cited_by content to populate "Most negative" / "Most recent
+    # negative" cards alongside the Direct history card.
+    # Citing references to Callahan v. Millard County (10th Cir. 2007)
+    edge(
+        citing_cluster_id=9920010,
+        cited_cluster_id=1425860,
+        treatment="Limited by",
+        quote="the consent-once-removed analysis in Callahan must be read narrowly post-Pearson",
+        rationale="Later 10th Cir. case limits Callahan's scope after Pearson reframed the QI inquiry.",
+        section_context="As we observed before, the consent-once-removed analysis in Callahan must be read narrowly post-Pearson; the rule does not extend to circumstances where the informant lacks ongoing authority to admit additional officers.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920011,
+        cited_cluster_id=1425860,
+        treatment="Distinguished by",
+        quote="Callahan addressed a controlled drug-buy posture not present here",
+        rationale="Sister 10th Cir. panel distinguishes on facts.",
+        section_context="The plaintiff relies on our decision in Callahan v. Millard County, but Callahan addressed a controlled drug-buy posture not present here. The officers in this case entered without an antecedent invitation by an authorized resident.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920012,
+        cited_cluster_id=1425860,
+        treatment="Cited by",
+        quote="we follow the framework laid out in Callahan",
+        rationale="Within-circuit district court applies Callahan's framework.",
+        section_context="In analyzing the consent-once-removed defense, we follow the framework laid out in Callahan v. Millard County, 494 F.3d 891 (10th Cir. 2007), with the subsequent gloss our circuit has applied.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920013,
+        cited_cluster_id=1425860,
+        treatment="Declined to follow by",
+        quote="we decline to adopt the consent-once-removed expansion endorsed by the Tenth Circuit in Callahan",
+        rationale="Sister-circuit (6th Cir., horizontal_persuasive) declines to follow the 10th Cir. rule.",
+        section_context="Although our sister Circuit reached the opposite conclusion, we decline to adopt the consent-once-removed expansion endorsed by the Tenth Circuit in Callahan v. Millard County. The doctrine, as applied there, runs afoul of the Fourth Amendment's clear textual demand for warrant-based entry.",
+        source="expert",
+    ),
+    edge(
+        citing_cluster_id=9920014,
+        cited_cluster_id=1425860,
+        treatment="Distinguished by",
+        quote="the consent-once-removed analysis in Callahan does not extend to the present facts",
+        rationale="Recent 10th Cir. case distinguishing — gives Callahan a divergent most-recent vs most-severe.",
+        section_context="The defendants invoke our prior decision in Callahan v. Millard County, but the consent-once-removed analysis in Callahan does not extend to the present facts. Here, no antecedent invitation gave the officers any color of authorization to enter.",
+        source="model",
+    ),
+    # Citing references to Henry v. Purnell (4th Cir. 2011 en banc)
+    edge(
+        citing_cluster_id=9920020,
+        cited_cluster_id=220962,
+        treatment="Cited by",
+        quote="our en banc decision in Henry v. Purnell",
+        rationale="Within-circuit follow-on; applies Henry's deadly-force / Garner standard.",
+        section_context="In assessing the officer's use of force, we apply the framework set out in our en banc decision in Henry v. Purnell, 652 F.3d 524 (4th Cir. 2011), which controls Fourth-Amendment excessive-force claims involving fleeing suspects.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920021,
+        cited_cluster_id=220962,
+        treatment="Distinguished by",
+        quote="Henry involved a stipulated mistake about the weapon used; here the officer concedes no mistake",
+        rationale="Within-circuit panel distinguishes on the stipulated-fact posture.",
+        section_context="The plaintiff's reliance on Henry v. Purnell is misplaced: Henry involved a stipulated mistake about the weapon used; here the officer concedes no mistake. Henry's qualified-immunity ruling thus does not control.",
+        source="model",
+        expert_treatment="Cited by",
+    ),
+    edge(
+        citing_cluster_id=9920022,
+        cited_cluster_id=220962,
+        treatment="Cited by",
+        quote="applying Henry v. Purnell's deadly-force framework",
+        rationale="Within-circuit district court applies Henry.",
+        section_context="In applying Henry v. Purnell's deadly-force framework, the Court considers whether a reasonable officer in the defendant's position would have understood that lethal force was unjustified under the totality of the circumstances.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920023,
+        cited_cluster_id=220962,
+        treatment="Criticized by",
+        quote="we are unable to reconcile the result in Henry v. Purnell with the Supreme Court's framework",
+        rationale="Sister-circuit (2nd Cir., horizontal_persuasive) criticizes the en banc result.",
+        section_context="With respect to our colleagues on the Fourth Circuit, we are unable to reconcile the result in Henry v. Purnell with the Supreme Court's framework for evaluating mistaken-belief uses of force. The objective-reasonableness inquiry should foreclose, not invite, second-guessing under the conditions there.",
+        source="expert",
+    ),
+    edge(
+        citing_cluster_id=9920024,
+        cited_cluster_id=220962,
+        treatment="Limited by",
+        quote="Henry's holding is limited to the stipulated mistake-of-weapon scenario",
+        rationale="Earlier within-circuit case narrows Henry's reach — gives Henry a divergent most-severe vs most-recent.",
+        section_context="As we have observed before, Henry's holding is limited to the stipulated mistake-of-weapon scenario. The court's analysis of objective unreasonableness was driven by that stipulated factual posture and does not generalize to ordinary deadly-force claims.",
+        source="model",
+    ),
+    # Citing references to Maldonado v. Fontanes (1st Cir. 2009)
+    edge(
+        citing_cluster_id=9920030,
+        cited_cluster_id=203857,
+        treatment="Cited by",
+        quote="we follow Maldonado v. Fontanes's articulation of the post-Pearson sequencing rule",
+        rationale="Within-circuit district court applies Maldonado.",
+        section_context="In addressing the qualified-immunity defense, we follow Maldonado v. Fontanes's articulation of the post-Pearson sequencing rule, exercising discretion to decide which prong to address first.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920031,
+        cited_cluster_id=203857,
+        treatment="Distinguished by",
+        quote="Maldonado involved a substantive due process claim; the present case is grounded entirely in Fourth Amendment seizure doctrine",
+        rationale="Within-circuit panel distinguishes on the underlying constitutional claim.",
+        section_context="The plaintiff invokes our holding in Maldonado v. Fontanes, but that case is inapposite here. Maldonado involved a substantive due process claim; the present case is grounded entirely in Fourth Amendment seizure doctrine.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920032,
+        cited_cluster_id=203857,
+        treatment="Limited by",
+        quote="Maldonado's broader procedural-due-process holding has been narrowed",
+        rationale="Within-circuit later panel limits Maldonado.",
+        section_context="To the extent that prior dicta suggested a more expansive procedural-due-process remedy, Maldonado's broader procedural-due-process holding has been narrowed by intervening decisions of the Supreme Court.",
+        source="model",
+    ),
+    # Citing references to Lacey v. Arpaio (9th Cir. 2012 en banc)
+    edge(
+        citing_cluster_id=9920040,
+        cited_cluster_id=807646,
+        treatment="Distinguished by",
+        quote="Lacey involved a high-profile arrest of journalists for newsgathering activity",
+        rationale="Within-circuit panel distinguishes on the journalism context.",
+        section_context="The plaintiff relies on Lacey v. Arpaio, but Lacey involved a high-profile arrest of journalists for newsgathering activity. The First Amendment retaliation claim there arose from a categorically different context than the routine traffic stop at issue here.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920041,
+        cited_cluster_id=807646,
+        treatment="Cited by",
+        quote="our en banc decision in Lacey v. Arpaio",
+        rationale="Within-circuit follow-on applying Lacey's First Amendment retaliation framework.",
+        section_context="As reaffirmed in our en banc decision in Lacey v. Arpaio, 693 F.3d 896 (9th Cir. 2012), retaliatory law-enforcement actions targeted at protected speech remain actionable under §1983.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920042,
+        cited_cluster_id=807646,
+        treatment="Cited by",
+        quote="Lacey v. Arpaio governs First Amendment retaliation analysis in this Circuit",
+        rationale="Within-circuit district court applies Lacey.",
+        section_context="Lacey v. Arpaio governs First Amendment retaliation analysis in this Circuit, and we apply its framework to evaluate the plaintiff's claim that her arrest was retaliatory.",
+        source="model",
+    ),
+    # Citing references to Hernandez v. City of Pomona (Cal. 2009)
+    edge(
+        citing_cluster_id=9920050,
+        cited_cluster_id=1801687,
+        treatment="Distinguished by",
+        quote="Hernandez addressed preclusion arising from a federal qualified-immunity ruling",
+        rationale="Same court (Cal. Supreme self-citation) distinguishes on procedural posture.",
+        section_context="The defendants invoke our preclusion analysis in Hernandez v. City of Pomona, but the procedural posture here is different. Hernandez addressed preclusion arising from a federal qualified-immunity ruling; here, the underlying federal action was dismissed without prejudice on jurisdictional grounds.",
+        source="expert",
+    ),
+    edge(
+        citing_cluster_id=9920051,
+        cited_cluster_id=1801687,
+        treatment="Cited by",
+        quote="Hernandez v. City of Pomona controls the issue-preclusion analysis",
+        rationale="State appellate court applies Hernandez.",
+        section_context="Where the federal court has resolved an excessive-force §1983 claim on qualified-immunity grounds, our Supreme Court's decision in Hernandez v. City of Pomona, 46 Cal. 4th 501 (2009), controls the issue-preclusion analysis.",
+        source="model",
+    ),
+    # Citing references to Martinez v. City of Schenectady (NY 2001)
+    edge(
+        citing_cluster_id=9920060,
+        cited_cluster_id=2219834,
+        treatment="Distinguished by",
+        quote="Martinez involved a federal qualified-immunity ruling that triggered preclusion",
+        rationale="Same court distinguishes on procedural posture.",
+        section_context="The defendants point to Martinez v. City of Schenectady, but Martinez involved a federal qualified-immunity ruling that triggered preclusion of the state constitutional tort claim. The present plaintiff faced no parallel federal proceeding.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920061,
+        cited_cluster_id=2219834,
+        treatment="Limited by",
+        quote="Martinez's preclusion holding does not extend beyond the search-warrant context",
+        rationale="Same court (NY Court of Appeals) narrows Martinez.",
+        section_context="To the extent later decisions have read Martinez expansively, we now clarify that Martinez's preclusion holding does not extend beyond the search-warrant context. The state-constitutional remedy remains available where the federal claim turns on different operative facts.",
+        source="model",
+        expert_treatment="Distinguished by",
+    ),
+    # Citing references to D. Utah Callahan (fictional district court, 2005)
+    edge(
+        citing_cluster_id=9920070,
+        cited_cluster_id=9999001,
+        treatment="Distinguished by",
+        quote="the district court's analysis in Callahan v. Millard County Sheriff turned on the consent-once-removed posture",
+        rationale="Later D. Utah opinion distinguishes on facts.",
+        section_context="The plaintiff's reliance on the district court's analysis in Callahan v. Millard County Sheriff turned on the consent-once-removed posture, which is not present here. We need not address whether the framework articulated there has survived Pearson's reframing of the qualified-immunity inquiry.",
+        source="model",
+    ),
+    edge(
+        citing_cluster_id=9920071,
+        cited_cluster_id=9999001,
+        treatment="Cited by",
+        quote="the consent-once-removed framework outlined in Callahan v. Millard County Sheriff",
+        rationale="Within-court (D. Utah) cites for fact-bound analysis.",
+        section_context="In applying the consent-once-removed framework outlined in Callahan v. Millard County Sheriff, we consider whether the antecedent invitation extended to subsequent law-enforcement entry under the totality of the circumstances.",
+        source="model",
+    ),
+]

@@ -1185,6 +1185,7 @@ EDGES = [
         rationale="Later 10th Cir. case limits Callahan's scope after Pearson reframed the QI inquiry.",
         section_context="As we observed before, the consent-once-removed analysis in Callahan must be read narrowly post-Pearson; the rule does not extend to circumstances where the informant lacks ongoing authority to admit additional officers.",
         source="model",
+        expert_treatment="Distinguished by",
     ),
     edge(
         citing_cluster_id=9920011,
@@ -1221,6 +1222,7 @@ EDGES = [
         rationale="Recent 10th Cir. case distinguishing — gives Callahan a divergent most-recent vs most-severe.",
         section_context="The defendants invoke our prior decision in Callahan v. Millard County, but the consent-once-removed analysis in Callahan does not extend to the present facts. Here, no antecedent invitation gave the officers any color of authorization to enter.",
         source="model",
+        expert_treatment="Cited by",
     ),
     # Citing references to Henry v. Purnell (4th Cir. 2011 en banc)
     edge(
@@ -1291,10 +1293,10 @@ EDGES = [
     edge(
         citing_cluster_id=9920032,
         cited_cluster_id=203857,
-        treatment="Limited by",
-        quote="Maldonado's broader procedural-due-process holding has been narrowed",
-        rationale="Within-circuit later panel limits Maldonado.",
-        section_context="To the extent that prior dicta suggested a more expansive procedural-due-process remedy, Maldonado's broader procedural-due-process holding has been narrowed by intervening decisions of the Supreme Court.",
+        treatment="Affirmed in part; Reversed in part as recognized by",
+        quote="Maldonado was later affirmed in part and reversed in part by the Supreme Court",
+        rationale="Long-treatment fixture: within-circuit panel recognizes Maldonado's mixed appellate disposition.",
+        section_context="As we have previously noted, Maldonado was later affirmed in part and reversed in part by the Supreme Court, narrowing the procedural-due-process holding while preserving the qualified-immunity analysis.",
         source="model",
     ),
     # Citing references to Lacey v. Arpaio (9th Cir. 2012 en banc)

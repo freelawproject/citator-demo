@@ -1,0 +1,152 @@
+{# Cited By tab content. Expects:
+   - `opinion.cited_by` array (pre-sorted severity asc, date desc;
+     each row has `recency_index` for the secondary recency sort).
+   Lives inside an Alpine `x-data="citedByFilter"` scope. #}
+{% from "macros/treatment.njk" import severityBadge, validationDot, indicatorState %}
+
+<div x-data="citedByFilter">
+  <div class="flex flex-wrap items-end gap-x-6 gap-y-4">
+    <fieldset>
+      <legend class="text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Severity</legend>
+      <div class="flex flex-wrap gap-2">
+        {% set sevTiers = [
+          {"label": "Stop", "prop": "filterStop"},
+          {"label": "Warning", "prop": "filterWarning"},
+          {"label": "Caution", "prop": "filterCaution"},
+          {"label": "Neutral", "prop": "filterNeutral"},
+          {"label": "Related", "prop": "filterRelated"}
+        ] %}
+        {% for s in sevTiers %}
+        <button
+          type="button"
+          x-on:click="toggleFilter('{{ s.prop }}')"
+          x-bind:aria-pressed="{{ s.prop }} ? 'true' : 'false'"
+          x-bind:class="{{ s.prop }} ? 'bg-greyscale-900 text-white border-greyscale-900' : 'bg-white text-greyscale-700 border-greyscale-300 hover:bg-greyscale-100'"
+          class="px-3 py-1 text-xs font-medium rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+        >
+          {{ s.label }}
+        </button>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend class="text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Validation</legend>
+      <div class="flex flex-wrap gap-2">
+        {% set valTiers = [
+          {"label": "Agree", "prop": "filterAgree"},
+          {"label": "Unverified", "prop": "filterUnverified"},
+          {"label": "Disagree", "prop": "filterDisagree"}
+        ] %}
+        {% for v in valTiers %}
+        <button
+          type="button"
+          x-on:click="toggleFilter('{{ v.prop }}')"
+          x-bind:aria-pressed="{{ v.prop }} ? 'true' : 'false'"
+          x-bind:class="{{ v.prop }} ? 'bg-greyscale-900 text-white border-greyscale-900' : 'bg-white text-greyscale-700 border-greyscale-300 hover:bg-greyscale-100'"
+          class="px-3 py-1 text-xs font-medium rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+        >
+          {{ v.label }}
+        </button>
+        {% endfor %}
+      </div>
+    </fieldset>
+
+    <div>
+      <label for="cited-by-sort" class="block text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Sort</label>
+      <select
+        id="cited-by-sort"
+        x-on:change="setSort($event.target.value)"
+        class="px-3 py-1.5 text-sm border border-greyscale-300 rounded-lg bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
+      >
+        <option value="severity">Severity</option>
+        <option value="recency">Recency</option>
+      </select>
+    </div>
+
+    <p
+      role="status"
+      aria-live="polite"
+      class="ml-auto text-xs text-greyscale-500"
+    >
+      <span x-text="visibleCount">{{ opinion.cited_by | length }}</span> of <span x-text="totalCount">{{ opinion.cited_by | length }}</span> citing cases
+    </p>
+  </div>
+
+  {% if opinion.cited_by | length == 0 %}
+  <p class="mt-6 bg-white rounded-2xl border border-greyscale-200 px-5 py-4 text-sm text-greyscale-600">
+    No subsequent opinions cite this case in our dataset.
+  </p>
+  {% else %}
+  <ul role="list" class="mt-6 list-none pl-0 m-0 flex flex-col bg-white rounded-2xl border border-greyscale-200 overflow-hidden">
+    {% for cb in opinion.cited_by %}
+    {% set vstate = indicatorState(cb.source, cb.treatment, cb.expert_treatment) | trim %}
+    <li
+      data-row-id="{{ cb.row_id }}"
+      data-severity="{{ cb.severity | lower }}"
+      data-validation="{{ vstate }}"
+      data-recency-index="{{ cb.recency_index }}"
+      x-show="rowVisible($el)"
+      x-bind:style="rowOrder($el)"
+      class="border-b border-greyscale-200 last:border-b-0"
+    >
+      <details class="authority-row">
+        <summary class="cursor-pointer list-none px-5 py-3.5 hover:bg-greyscale-50 focus-visible:bg-greyscale-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-300">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {{ validationDot(vstate) }}
+            {{ severityBadge(cb.severity, cb.treatment) }}
+            <span class="flex-1 min-w-0 text-sm">
+              {% if cb.is_scoped %}
+                <a href="/opinion/{{ cb.citing_cluster_id }}/" class="font-semibold text-greyscale-900 hover:text-primary-700 hover:underline" x-on:click.stop>{{ cb.citing_case_name }}</a>
+              {% else %}
+                <span class="font-semibold text-greyscale-900">{{ cb.citing_case_name }}</span>
+              {% endif %}
+            </span>
+            <svg class="w-4 h-4 expand-chevron text-greyscale-400 transition-transform flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+            </svg>
+          </div>
+          <dl class="mt-2 grid gap-y-1 text-xs">
+            <div class="flex flex-wrap gap-x-10 gap-y-0.5">
+              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Court</dt>
+                <dd class="text-greyscale-700">{{ cb.citing_court_display }}</dd>
+              </div>
+              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">File Date</dt>
+                <dd class="text-greyscale-700">{{ cb.citing_date_filed }}</dd>
+              </div>
+              {% if cb.citing_docket_number %}
+              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Docket Number</dt>
+                <dd class="text-greyscale-700">{{ cb.citing_docket_number }}</dd>
+              </div>
+              {% endif %}
+            </div>
+            {% if cb.citing_citations %}
+            <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+              <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Citations</dt>
+              <dd class="text-greyscale-700">
+                {% for c in cb.citing_citations %}{{ c }}{% if not loop.last %} <span class="text-greyscale-400" aria-hidden="true">·</span> {% endif %}{% endfor %}
+              </dd>
+            </div>
+            {% endif %}
+          </dl>
+        </summary>
+
+        <div class="px-5 py-4 bg-greyscale-50 border-t border-greyscale-200 space-y-3 text-sm">
+          {% if cb.expand and cb.expand.context %}
+          {% set ctx = cb.expand.context %}
+          <p class="pl-3 border-l-2 border-greyscale-300 text-greyscale-700 leading-relaxed">
+            {%- if ctx.before %}{{ ctx.before }} {% endif -%}
+            <span class="inline bg-yellow-100 text-greyscale-900 font-semibold rounded px-1">{{ ctx.quote }}</span>
+            {%- if ctx.after %} {{ ctx.after }}{% endif -%}
+          </p>
+          {% endif %}
+        </div>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>

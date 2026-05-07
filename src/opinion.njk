@@ -9,6 +9,7 @@ scripts:
   - /assets/js/alpine/components/opinion_tabs.js
   - /assets/js/alpine/components/authorities_filter.js
   - /assets/js/alpine/components/cited_by_filter.js
+  - /assets/js/alpine/components/summary_picker.js
 eleventyComputed:
   title: "{{ opinion.case_name }}"
 ---
@@ -35,6 +36,12 @@ eleventyComputed:
           <dt class="text-xs uppercase tracking-wide font-semibold text-greyscale-500">File Date</dt>
           <dd class="text-greyscale-700">{{ opinion.date_filed }}</dd>
         </div>
+        {% if opinion.docket_number %}
+        <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+          <dt class="text-xs uppercase tracking-wide font-semibold text-greyscale-500">Docket Number</dt>
+          <dd class="text-greyscale-700">{{ opinion.docket_number }}</dd>
+        </div>
+        {% endif %}
       </div>
       {% if opinion.citations %}
       <div class="flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
@@ -48,18 +55,71 @@ eleventyComputed:
   </header>
 
   <section aria-label="Treatment summary" class="mt-6">
-    {% set neg = opinion.summary.most_negative %}
-    {% set rec = opinion.summary.most_recent_negative %}
-    {% if neg and rec and neg.citing_cluster_id == rec.citing_cluster_id and neg.treatment == rec.treatment %}
-      {{ treatmentBlock(neg, "Most negative & most recent") }}
-    {% elif neg or rec %}
-      <div class="grid gap-4 md:grid-cols-2">
-        {% if neg %}{{ treatmentBlock(neg, "Most negative") }}{% endif %}
-        {% if rec %}{{ treatmentBlock(rec, "Most recent negative") }}{% endif %}
+    {% set dh = opinion.summary.direct_history %}
+    {% set cr = opinion.summary.most_severe_treatment %}
+    {# Always render two views: Direct history and Citing reference.
+       Citing reference surfaces the most severe non-direct negative
+       treatment; users can sort the Cited By tab for the full list. #}
+    <div x-data="summaryPicker('direct_history')">
+      <div role="tablist" aria-label="Treatment summary view" class="mb-3 inline-flex rounded-lg border border-greyscale-300 overflow-hidden text-xs font-semibold uppercase tracking-wide">
+        <button
+          type="button"
+          role="tab"
+          data-view="direct_history"
+          x-on:click="setView('direct_history')"
+          x-on:keydown="onKeydown($event)"
+          x-bind:aria-selected="view === 'direct_history' ? 'true' : 'false'"
+          x-bind:tabindex="view === 'direct_history' ? 0 : -1"
+          x-bind:class="view === 'direct_history' ? 'bg-greyscale-900 text-white' : 'bg-white text-greyscale-600 hover:bg-greyscale-50'"
+          class="px-3 py-1.5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-300"
+        >
+          Direct history
+        </button>
+        <button
+          type="button"
+          role="tab"
+          data-view="citing_reference"
+          x-on:click="setView('citing_reference')"
+          x-on:keydown="onKeydown($event)"
+          x-bind:aria-selected="view === 'citing_reference' ? 'true' : 'false'"
+          x-bind:tabindex="view === 'citing_reference' ? 0 : -1"
+          x-bind:class="view === 'citing_reference' ? 'bg-greyscale-900 text-white' : 'bg-white text-greyscale-600 hover:bg-greyscale-50'"
+          class="px-3 py-1.5 border-l border-greyscale-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-300"
+        >
+          Citing reference
+        </button>
       </div>
-    {% else %}
-      <p class="bg-white rounded-2xl border border-greyscale-200 px-4 py-3 text-sm text-greyscale-600">No negative inbound treatments recorded.</p>
-    {% endif %}
+
+      <div x-show="view === 'direct_history'" x-cloak>
+        {% if dh %}
+          {{ treatmentBlock(dh, "") }}
+        {% else %}
+          <article class="rounded-2xl border border-greyscale-200 bg-white px-5 py-4">
+            {% if opinion.is_court_of_last_resort %}
+            <p class="text-sm text-greyscale-600 leading-relaxed">
+              <span class="font-semibold text-greyscale-900">{{ opinion.court_display }}</span> is a court of last resort. Decisions from this court are not subject to direct appellate review.
+            </p>
+            {% else %}
+            <p class="text-sm text-greyscale-600 leading-relaxed">
+              No higher-court appellate history has been identified for this opinion.
+            </p>
+            {% endif %}
+          </article>
+        {% endif %}
+      </div>
+
+      <div x-show="view === 'citing_reference'" x-cloak>
+        {% if cr %}
+          {{ treatmentBlock(cr, "") }}
+        {% else %}
+          <article class="rounded-2xl border border-greyscale-200 bg-white px-5 py-4">
+            <p class="text-sm text-greyscale-600 leading-relaxed">
+              No negative citing references identified for this opinion.
+            </p>
+          </article>
+        {% endif %}
+      </div>
+    </div>
   </section>
 
   <div
@@ -96,7 +156,7 @@ eleventyComputed:
       tabindex="0"
     >
       {% if tab.id == "opinion" %}
-        <div class="opinion-body max-w-3xl">
+        <div class="opinion-body">
           {{ opinion.document.body_html | safe }}
         </div>
       {% elif tab.id == "authorities" %}

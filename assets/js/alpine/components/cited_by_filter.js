@@ -69,10 +69,6 @@ document.addEventListener('alpine:init', () => {
       this.totalCount = rows.length;
       this.visibleCount = rows.length;
 
-      // Lock the list to its first-rendered height so filtering rows out
-      // (display: none) doesn't shrink the container and reflow the page.
-      // The list lives inside a tabpanel that may be hidden at init, so we
-      // wait via ResizeObserver until the list actually has a height.
       const list = this.$root.querySelector('ul[role="list"]');
       if (list && typeof ResizeObserver !== 'undefined') {
         const observer = new ResizeObserver((entries) => {

@@ -1,7 +1,8 @@
 {# Cited By tab content. Expects:
-   - `opinion.cited_by` array (pre-sorted severity asc, date desc).
+   - `opinion.cited_by` array (pre-sorted severity asc, date desc;
+     each row has `recency_index` for the secondary recency sort).
    Lives inside an Alpine `x-data="citedByFilter"` scope. #}
-{% from "macros/treatment.njk" import severityBadge, validationDot %}
+{% from "macros/treatment.njk" import severityBadge, validationDot, indicatorState %}
 
 <div x-data="citedByFilter">
   <div class="flex flex-wrap items-end gap-x-6 gap-y-4">
@@ -58,7 +59,7 @@
         x-on:change="setSort($event.target.value)"
         class="px-3 py-1.5 text-sm border border-greyscale-300 rounded-lg bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
       >
-        <option value="severity">Severity, then recency</option>
+        <option value="severity">Severity</option>
         <option value="recency">Recency</option>
       </select>
     </div>
@@ -79,10 +80,11 @@
   {% else %}
   <ul role="list" class="mt-6 list-none pl-0 m-0 flex flex-col bg-white rounded-2xl border border-greyscale-200 overflow-hidden">
     {% for cb in opinion.cited_by %}
+    {% set vstate = indicatorState(cb.source, cb.treatment, cb.expert_treatment) | trim %}
     <li
       data-row-id="{{ cb.row_id }}"
       data-severity="{{ cb.severity | lower }}"
-      data-validation="{{ cb.validation.state }}"
+      data-validation="{{ vstate }}"
       data-recency-index="{{ cb.recency_index }}"
       x-show="rowVisible($el)"
       x-bind:style="rowOrder($el)"
@@ -91,7 +93,7 @@
       <details class="authority-row">
         <summary class="cursor-pointer list-none px-5 py-3.5 hover:bg-greyscale-50 focus-visible:bg-greyscale-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-300">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {{ validationDot(cb.validation.state) }}
+            {{ validationDot(vstate) }}
             {{ severityBadge(cb.severity, cb.treatment) }}
             <span class="flex-1 min-w-0 text-sm">
               {% if cb.is_scoped %}
@@ -114,11 +116,19 @@
                 <dt class="uppercase tracking-wide font-semibold text-greyscale-500">File Date</dt>
                 <dd class="text-greyscale-700">{{ cb.citing_date_filed }}</dd>
               </div>
+              {% if cb.citing_docket_number %}
+              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Docket Number</dt>
+                <dd class="text-greyscale-700">{{ cb.citing_docket_number }}</dd>
+              </div>
+              {% endif %}
             </div>
-            {% if cb.citing_citation %}
+            {% if cb.citing_citations %}
             <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
               <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Citations</dt>
-              <dd class="text-greyscale-700">{{ cb.citing_citation }}</dd>
+              <dd class="text-greyscale-700">
+                {% for c in cb.citing_citations %}{{ c }}{% if not loop.last %} <span class="text-greyscale-400" aria-hidden="true">·</span> {% endif %}{% endfor %}
+              </dd>
             </div>
             {% endif %}
           </dl>

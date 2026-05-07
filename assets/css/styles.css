@@ -114,13 +114,19 @@
     @apply mb-6 rounded-lg;
   }
   .opinion-body section.section-flash {
-    animation: quote-flash-fade 1.8s ease-out;
+    animation: quote-flash-fade 3.5s ease-out;
   }
   .opinion-body p.quote-flash {
-    animation: quote-flash-fade 1.8s ease-out;
+    animation: quote-flash-fade 3.5s ease-out;
+  }
+  .opinion-body span.quote-flash {
+    animation: quote-flash-inline 3.5s ease-out;
+    border-radius: 3px;
+    padding: 0 2px;
+    margin: 0 -2px;
   }
   @keyframes quote-flash-fade {
-    0%, 25% {
+    0%, 60% {
       background-color: rgb(254 240 138 / 0.6);
       box-shadow: 0 0 0 6px rgb(254 240 138 / 0.6);
       border-radius: 6px;
@@ -129,6 +135,16 @@
       background-color: transparent;
       box-shadow: 0 0 0 6px transparent;
       border-radius: 6px;
+    }
+  }
+  @keyframes quote-flash-inline {
+    0%, 60% {
+      background-color: rgb(254 240 138 / 0.85);
+      box-shadow: 0 0 0 2px rgb(254 240 138 / 0.85);
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: 0 0 0 2px transparent;
     }
   }
   .opinion-body section h2 {

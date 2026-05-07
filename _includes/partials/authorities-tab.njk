@@ -1,7 +1,7 @@
 {# Authorities tab content. Expects:
    - `opinion.authorities` array (pre-sorted severity asc, date desc).
    Lives inside an Alpine `x-data="authoritiesFilter"` scope. #}
-{% from "macros/treatment.njk" import severityBadge, validationDot %}
+{% from "macros/treatment.njk" import severityBadge, validationDot, indicatorState %}
 
 <div x-data="authoritiesFilter">
   <div class="flex flex-wrap items-end gap-x-6 gap-y-4">
@@ -74,10 +74,11 @@
 
   <ul role="list" class="mt-6 list-none pl-0 m-0 flex flex-col bg-white rounded-2xl border border-greyscale-200 overflow-hidden">
     {% for auth in opinion.authorities %}
+    {% set vstate = indicatorState(auth.source, auth.treatment, auth.expert_treatment) | trim %}
     <li
       data-row-id="{{ auth.row_id }}"
       data-severity="{{ auth.severity | lower }}"
-      data-validation="{{ auth.validation.state }}"
+      data-validation="{{ vstate }}"
       data-appearance-index="{{ loop.index0 }}"
       x-show="rowVisible($el)"
       x-bind:style="rowOrder($el)"
@@ -86,7 +87,7 @@
       <details class="authority-row">
         <summary class="cursor-pointer list-none px-5 py-3.5 hover:bg-greyscale-50 focus-visible:bg-greyscale-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-300">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {{ validationDot(auth.validation.state) }}
+            {{ validationDot(vstate) }}
             {{ severityBadge(auth.severity, auth.treatment_active) }}
             <span class="flex-1 min-w-0 text-sm">
               {% if auth.is_scoped %}
@@ -94,12 +95,37 @@
               {% else %}
                 <span class="font-semibold text-greyscale-900">{{ auth.cited_case_name }}</span>
               {% endif %}
-              <span class="text-greyscale-500">, {{ auth.cited_citation }}</span>
             </span>
             <svg class="w-4 h-4 expand-chevron text-greyscale-400 transition-transform flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
             </svg>
           </div>
+          <dl class="mt-2 grid gap-y-1 text-xs">
+            <div class="flex flex-wrap gap-x-10 gap-y-0.5">
+              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Court</dt>
+                <dd class="text-greyscale-700">{{ auth.cited_court_display }}</dd>
+              </div>
+              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">File Date</dt>
+                <dd class="text-greyscale-700">{{ auth.cited_date_filed }}</dd>
+              </div>
+              {% if auth.cited_docket_number %}
+              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Docket Number</dt>
+                <dd class="text-greyscale-700">{{ auth.cited_docket_number }}</dd>
+              </div>
+              {% endif %}
+            </div>
+            {% if auth.cited_citations %}
+            <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+              <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Citations</dt>
+              <dd class="text-greyscale-700">
+                {% for c in auth.cited_citations %}{{ c }}{% if not loop.last %} <span class="text-greyscale-400" aria-hidden="true">·</span> {% endif %}{% endfor %}
+              </dd>
+            </div>
+            {% endif %}
+          </dl>
         </summary>
 
         <div class="px-5 py-4 bg-greyscale-50 border-t border-greyscale-200 space-y-3 text-sm">
@@ -109,7 +135,8 @@
             {%- if ctx.before %}{{ ctx.before }} {% endif -%}
             <button
               type="button"
-              x-on:click="$dispatch('quote-click', { quote: {{ ctx.quote | dump | safe }} })"
+              data-quote="{{ ctx.quote }}"
+              x-on:click="$dispatch('quote-click', { quote: $el.dataset.quote })"
               class="inline text-left bg-yellow-100 text-greyscale-900 font-semibold rounded px-1 cursor-pointer hover:bg-yellow-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 transition-colors"
               aria-label="Show this quote in the opinion body"
             >{{ ctx.quote }}</button>

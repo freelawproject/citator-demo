@@ -62,14 +62,24 @@ document.addEventListener('alpine:init', () => {
         const lower = quote.toLowerCase();
         const paragraphs = body.querySelectorAll('p');
         for (const p of paragraphs) {
-          if (p.textContent.toLowerCase().includes(lower)) {
-            p.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            p.classList.remove('quote-flash');
-            void p.offsetHeight;
-            p.classList.add('quote-flash');
-            setTimeout(() => p.classList.remove('quote-flash'), 1800);
-            return;
-          }
+          if (!p.textContent.toLowerCase().includes(lower)) continue;
+
+          // Wrap each text-node slice that falls within the quote range
+          // in its own .quote-flash span. Handles quotes that cross
+          // inline elements (e.g., a cross-citation rendered as <a>).
+          const spans = wrapQuoteAcrossTextNodes(p, quote);
+          if (spans.length === 0) return;
+          spans[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Force reflow before adding the class so the animation
+          // restarts when the same quote is clicked twice in a row.
+          spans.forEach((s) => s.classList.remove('quote-flash'));
+          void spans[0].offsetHeight;
+          spans.forEach((s) => s.classList.add('quote-flash'));
+          setTimeout(() => {
+            spans.forEach((s) => s.classList.remove('quote-flash'));
+            unwrapSpans(spans);
+          }, 3500);
+          return;
         }
       });
     },
@@ -86,3 +96,65 @@ document.addEventListener('alpine:init', () => {
     },
   }));
 });
+
+// Walk a paragraph's text nodes, find where `quote` lies in the
+// concatenated text, and wrap each text-node slice that falls within
+// the quote range in its own <span>. Handles quotes that cross inline
+// elements (e.g., a cross-citation rendered as <a>) by producing one
+// span per crossed text node, all of which animate together.
+function wrapQuoteAcrossTextNodes(p, quote) {
+  const lower = quote.toLowerCase();
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  const textNodes = [];
+  let flatText = '';
+  let node;
+  while ((node = walker.nextNode())) {
+    textNodes.push({
+      node,
+      start: flatText.length,
+      end: flatText.length + node.textContent.length,
+    });
+    flatText += node.textContent;
+  }
+
+  const startIdx = flatText.toLowerCase().indexOf(lower);
+  if (startIdx < 0) return [];
+  const endIdx = startIdx + quote.length;
+
+  const spans = [];
+  // Iterate over a snapshot — we mutate the DOM (replaceChild) during
+  // the loop, but each entry's `node` reference is stable.
+  for (const tn of textNodes) {
+    if (tn.end <= startIdx || tn.start >= endIdx) continue;
+
+    const localStart = Math.max(0, startIdx - tn.start);
+    const localEnd = Math.min(
+      tn.node.textContent.length,
+      endIdx - tn.start
+    );
+    const text = tn.node.textContent;
+    const before = text.slice(0, localStart);
+    const match = text.slice(localStart, localEnd);
+    const after = text.slice(localEnd);
+
+    const span = document.createElement('span');
+    span.textContent = match;
+    const fragment = document.createDocumentFragment();
+    if (before) fragment.appendChild(document.createTextNode(before));
+    fragment.appendChild(span);
+    if (after) fragment.appendChild(document.createTextNode(after));
+    tn.node.parentNode.replaceChild(fragment, tn.node);
+    spans.push(span);
+  }
+  return spans;
+}
+
+function unwrapSpans(spans) {
+  for (const span of spans) {
+    const parent = span.parentNode;
+    if (!parent) continue;
+    while (span.firstChild) parent.insertBefore(span.firstChild, span);
+    parent.removeChild(span);
+    parent.normalize();
+  }
+}

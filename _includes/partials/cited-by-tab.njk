@@ -6,22 +6,21 @@
 
 <div x-data="citedByFilter">
   <div class="flex flex-wrap items-end gap-x-6 gap-y-4">
-    <fieldset>
+    <fieldset class="pr-6 border-r border-greyscale-200">
       <legend class="text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Severity</legend>
       <div class="flex flex-wrap gap-2">
         {% set sevTiers = [
-          {"label": "Stop", "prop": "filterStop"},
-          {"label": "Warning", "prop": "filterWarning"},
-          {"label": "Caution", "prop": "filterCaution"},
-          {"label": "Neutral", "prop": "filterNeutral"},
-          {"label": "Related", "prop": "filterRelated"}
+          {"label": "Stop", "prop": "filterStop", "active": "bg-red-500/10 text-red-700 border-red-500", "inactive": "bg-white text-red-700 border-red-200 hover:bg-red-50"},
+          {"label": "Warning", "prop": "filterWarning", "active": "bg-orange-500/10 text-orange-700 border-orange-500", "inactive": "bg-white text-orange-700 border-orange-200 hover:bg-orange-50"},
+          {"label": "Caution", "prop": "filterCaution", "active": "bg-amber-500/15 text-amber-700 border-amber-500", "inactive": "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"},
+          {"label": "Neutral", "prop": "filterNeutral", "active": "bg-greyscale-200 text-greyscale-700 border-greyscale-400", "inactive": "bg-white text-greyscale-700 border-greyscale-300 hover:bg-greyscale-100"}
         ] %}
         {% for s in sevTiers %}
         <button
           type="button"
           x-on:click="toggleFilter('{{ s.prop }}')"
           x-bind:aria-pressed="{{ s.prop }} ? 'true' : 'false'"
-          x-bind:class="{{ s.prop }} ? 'bg-greyscale-900 text-white border-greyscale-900' : 'bg-white text-greyscale-700 border-greyscale-300 hover:bg-greyscale-100'"
+          x-bind:class="{{ s.prop }} ? '{{ s.active }}' : '{{ s.inactive }}'"
           class="px-3 py-1 text-xs font-medium rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
         >
           {{ s.label }}
@@ -30,20 +29,20 @@
       </div>
     </fieldset>
 
-    <fieldset>
+    <fieldset class="pr-6 border-r border-greyscale-200">
       <legend class="text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Validation</legend>
       <div class="flex flex-wrap gap-2">
         {% set valTiers = [
-          {"label": "Agree", "prop": "filterAgree"},
-          {"label": "Unverified", "prop": "filterUnverified"},
-          {"label": "Disagree", "prop": "filterDisagree"}
+          {"label": "Validated", "prop": "filterAgree", "active": "bg-blue-500/10 text-blue-700 border-blue-500", "inactive": "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"},
+          {"label": "Invalidated", "prop": "filterDisagree", "active": "bg-purple-500/10 text-purple-700 border-purple-500", "inactive": "bg-white text-purple-700 border-purple-200 hover:bg-purple-50"},
+          {"label": "Unvalidated", "prop": "filterUnverified", "active": "bg-greyscale-200 text-greyscale-700 border-greyscale-400", "inactive": "bg-white text-greyscale-700 border-greyscale-300 hover:bg-greyscale-100"}
         ] %}
         {% for v in valTiers %}
         <button
           type="button"
           x-on:click="toggleFilter('{{ v.prop }}')"
           x-bind:aria-pressed="{{ v.prop }} ? 'true' : 'false'"
-          x-bind:class="{{ v.prop }} ? 'bg-greyscale-900 text-white border-greyscale-900' : 'bg-white text-greyscale-700 border-greyscale-300 hover:bg-greyscale-100'"
+          x-bind:class="{{ v.prop }} ? '{{ v.active }}' : '{{ v.inactive }}'"
           class="px-3 py-1 text-xs font-medium rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
         >
           {{ v.label }}
@@ -93,20 +92,21 @@
       <details class="authority-row">
         <summary class="cursor-pointer list-none px-5 py-3.5 hover:bg-greyscale-50 focus-visible:bg-greyscale-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-300">
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {{ validationDot(vstate) }}
             {{ severityBadge(cb.severity, cb.treatment) }}
-            <span class="flex-1 min-w-0 text-sm">
+            <span class="flex-1 min-w-0 text-sm inline-flex items-center gap-x-2">
               {% if cb.is_scoped %}
                 <a href="/opinion/{{ cb.citing_cluster_id }}/" class="font-semibold text-greyscale-900 hover:text-primary-700 hover:underline" x-on:click.stop>{{ cb.citing_case_name }}</a>
               {% else %}
                 <span class="font-semibold text-greyscale-900">{{ cb.citing_case_name }}</span>
               {% endif %}
+              {{ validationDot(vstate, cb.expert_treatment) }}
             </span>
             <svg class="w-4 h-4 expand-chevron text-greyscale-400 transition-transform flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
             </svg>
           </div>
           <dl class="mt-2 grid gap-y-1 text-xs">
+            {# Line 1: Court + File Date + Docket Number (wraps) #}
             <div class="flex flex-wrap gap-x-10 gap-y-0.5">
               <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                 <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Court</dt>
@@ -123,11 +123,33 @@
               </div>
               {% endif %}
             </div>
+            {# Line 2: Citations — first 3 always shown; remaining hidden
+               behind a "+N" expand button. Each row scopes its own state. #}
             {% if cb.citing_citations %}
-            <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+            {% set citationCount = cb.citing_citations | length %}
+            <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5" x-data="{ showAll: false }">
               <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Citations</dt>
               <dd class="text-greyscale-700">
-                {% for c in cb.citing_citations %}{{ c }}{% if not loop.last %} <span class="text-greyscale-400" aria-hidden="true">·</span> {% endif %}{% endfor %}
+                {% for c in cb.citing_citations %}
+                  {%- if loop.index == 1 -%}
+                    {{ c }}
+                  {%- elif loop.index <= 3 -%}
+                    <span class="text-greyscale-400" aria-hidden="true"> · </span>{{ c }}
+                  {%- else -%}
+                    <span x-show="showAll" x-cloak><span class="text-greyscale-400" aria-hidden="true"> · </span>{{ c }}</span>
+                  {%- endif -%}
+                {% endfor %}
+                {% if citationCount > 3 %}
+                <button
+                  type="button"
+                  x-show="!showAll"
+                  x-on:click.stop.prevent="showAll = true"
+                  aria-label="Show {{ citationCount - 3 }} more citation{% if citationCount - 3 != 1 %}s{% endif %}"
+                  class="ml-1 inline-flex items-center justify-center rounded-full bg-greyscale-100 hover:bg-greyscale-200 px-1.5 py-0.5 text-[10px] font-semibold text-greyscale-600 transition"
+                >
+                  +{{ citationCount - 3 }}
+                </button>
+                {% endif %}
               </dd>
             </div>
             {% endif %}

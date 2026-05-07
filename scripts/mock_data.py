@@ -79,6 +79,56 @@ COURT_LEVEL = {
 # questions, but for the demo we treat them as last-resort).
 COURTS_OF_LAST_RESORT = frozenset({"scotus", "ny", "cal"})
 
+# Higher-level grouping for the search-results court filter rail. Each
+# court key maps to a category whose top-level checkbox lets users select
+# every court in the group at once (e.g., all circuit courts).
+COURT_CATEGORY = {
+    "scotus": "scotus",
+    "ca1": "circuit",
+    "ca2": "circuit",
+    "ca3": "circuit",
+    "ca4": "circuit",
+    "ca5": "circuit",
+    "ca6": "circuit",
+    "ca7": "circuit",
+    "ca8": "circuit",
+    "ca9": "circuit",
+    "ca10": "circuit",
+    "ca11": "circuit",
+    "cadc": "circuit",
+    "cafc": "circuit",
+    "ny": "state_supreme",
+    "cal": "state_supreme",
+    "utd": "district",
+    "dist": "district",
+}
+
+CATEGORY_DISPLAY = {
+    "scotus": "U.S. Supreme Court",
+    "circuit": "U.S. Circuit courts",
+    "state_supreme": "State COLR",
+    "district": "U.S. District courts",
+}
+
+CATEGORY_ORDER = ("scotus", "circuit", "district", "state_supreme")
+
+# Jurisdiction split for the search-results filter rail. Each category
+# belongs to exactly one jurisdiction, and the filter rail's top-level
+# parent checkbox toggles every court within that jurisdiction.
+CATEGORY_JURISDICTION = {
+    "scotus": "federal",
+    "circuit": "federal",
+    "district": "federal",
+    "state_supreme": "state",
+}
+
+JURISDICTION_DISPLAY = {
+    "federal": "Federal",
+    "state": "State",
+}
+
+JURISDICTION_ORDER = ("federal", "state")
+
 
 # ── Helpers ────────────────────────────────────────────────────────────
 def opinion(

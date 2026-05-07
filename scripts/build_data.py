@@ -23,11 +23,17 @@ from html import escape
 from pathlib import Path
 
 from mock_data import (
+    CATEGORY_DISPLAY,
+    CATEGORY_JURISDICTION,
+    CATEGORY_ORDER,
+    COURT_CATEGORY,
     COURT_DISPLAY,
     COURT_LEVEL,
     COURTS_OF_LAST_RESORT,
     EDGES,
     EXTERNAL_OPINIONS,
+    JURISDICTION_DISPLAY,
+    JURISDICTION_ORDER,
     SCOPED_CLUSTER_IDS,
     SCOPED_OPINIONS,
 )
@@ -64,8 +70,7 @@ SEVERITY_RANK = {
     "Stop": 0,
     "Warning": 1,
     "Caution": 2,
-    "Related": 3,
-    "Neutral": 4,
+    "Neutral": 3,
 }
 NEGATIVE_TIERS = {"Stop", "Warning", "Caution"}
 
@@ -98,10 +103,19 @@ OPINIONS_OUT = OUT_DIR / "opinions"
 
 
 def severity_for(treatment: str) -> str:
+    """Map a treatment label to its severity tier.
+
+    "As recognized by" treatments inherit the underlying treatment's tier
+    per the canonical taxonomy in `ai-research/CLAUDE.md` § Treatments —
+    e.g., "Overruled as recognized by" → Stop (because Overruled by is
+    Stop), "Limited as recognized by" → Warning. The "Related" pseudo-
+    tier from earlier mock revisions is gone; Related Reference is a
+    direction (in `direction_for`), not a severity.
+    """
     if not isinstance(treatment, str):
         return "Other"
     if "as recognized by" in treatment:
-        return "Related"
+        treatment = treatment.replace(" as recognized", "")
     return SEVERITY_BY_TREATMENT.get(treatment, "Other")
 
 
@@ -249,6 +263,11 @@ ACTIVE_VOICE = {
 def to_active_voice(treatment: str) -> str:
     if treatment in ACTIVE_VOICE:
         return ACTIVE_VOICE[treatment]
+    # "X as recognized by" → "Recognizes as x" (the citing opinion notes
+    # that the cited authority was previously X'd by some other case).
+    if "as recognized by" in treatment:
+        base = treatment.replace(" as recognized by", "").strip()
+        return f"Recognizes as {base.lower()}"
     if treatment.endswith(" by"):
         return treatment[:-3]
     return treatment
@@ -509,10 +528,24 @@ def build_summary(cited_by_sorted: list[dict]) -> dict:
         latest_any = max(cited_by_sorted, key=lambda r: r["citing_date_filed"])
         headline = _summary_pointer_from_view(latest_any)
 
+    # `cr_severity` is the most-severe NON-direct-history cited_by tier
+    # (any tier including Neutral). Used by the search-results filter
+    # rail's tabbed severity filter — distinct from `most_severe_treatment`,
+    # which is restricted to negative tiers and drives the opinion-page
+    # summary picker.
+    citing_any = [
+        cb for cb in cited_by_sorted if cb["direction"] != "Direct History"
+    ]
+    cr_severity = citing_any[0]["severity"] if citing_any else None
+
+    dh_severity = direct[0]["severity"] if direct else None
+
     return {
         "most_severe_treatment": most_severe,
         "direct_history": direct_history,
         "headline": headline,
+        "dh_severity": dh_severity,
+        "cr_severity": cr_severity,
     }
 
 
@@ -584,9 +617,71 @@ def main() -> None:
         json.dumps(index_entries, indent=2, ensure_ascii=False)
     )
 
+    # Emit a courts list for the search-results filter rail. Sorted by
+    # hierarchy (level 0 first), then alphabetical by display name within
+    # a level. Each entry includes a `category` for the parent-checkbox
+    # group on the filter rail. The filter rail uses this as the single
+    # source of truth for court labels — no more inline courtNames dict
+    # in index.njk.
+    courts_list = sorted(
+        (
+            {
+                "key": key,
+                "display": COURT_DISPLAY.get(key, key),
+                "level": COURT_LEVEL.get(key, 99),
+                "category": COURT_CATEGORY.get(key, "other"),
+            }
+            for key in COURT_DISPLAY
+        ),
+        key=lambda c: (c["level"], c["display"].lower()),
+    )
+    courts_path = OUT_DIR / "courts.json"
+    courts_path.write_text(
+        json.dumps(courts_list, indent=2, ensure_ascii=False)
+    )
+
+    # Court categories — each entry has a stable key + display name +
+    # jurisdiction + an order index that drives the filter rail's group
+    # order.
+    categories_list = [
+        {
+            "key": cat,
+            "display": CATEGORY_DISPLAY[cat],
+            "jurisdiction": CATEGORY_JURISDICTION.get(cat),
+            "order": idx,
+        }
+        for idx, cat in enumerate(CATEGORY_ORDER)
+        if cat in CATEGORY_DISPLAY
+    ]
+    categories_path = OUT_DIR / "court_categories.json"
+    categories_path.write_text(
+        json.dumps(categories_list, indent=2, ensure_ascii=False)
+    )
+
+    # Jurisdictions list — drives the top-level parent checkbox in the
+    # filter rail (Federal / State).
+    jurisdictions_list = [
+        {
+            "key": jur,
+            "display": JURISDICTION_DISPLAY[jur],
+            "order": idx,
+        }
+        for idx, jur in enumerate(JURISDICTION_ORDER)
+        if jur in JURISDICTION_DISPLAY
+    ]
+    jurisdictions_path = OUT_DIR / "court_jurisdictions.json"
+    jurisdictions_path.write_text(
+        json.dumps(jurisdictions_list, indent=2, ensure_ascii=False)
+    )
+
     print(f"Wrote {len(SCOPED_OPINIONS)} opinion JSONs to {OPINIONS_OUT}")
     print(
         f"Wrote index.json with {len(index_entries)} entries to {index_path}"
+    )
+    print(f"Wrote courts.json with {len(courts_list)} entries")
+    print(f"Wrote court_categories.json with {len(categories_list)} entries")
+    print(
+        f"Wrote court_jurisdictions.json with {len(jurisdictions_list)} entries"
     )
     print(f"Validated {len(EDGES)} edges (hierarchy + temporal)")
 

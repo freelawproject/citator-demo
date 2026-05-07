@@ -4,20 +4,12 @@ document.addEventListener('alpine:init', () => {
     filterWarning: false,
     filterCaution: false,
     filterNeutral: false,
-    filterRelated: false,
     filterAgree: false,
     filterUnverified: false,
     filterDisagree: false,
     sortBy: 'severity',
-    expandedRows: [],
     totalCount: 0,
     visibleCount: 0,
-
-    toggleRow(rowId) {
-      this.expandedRows = this.expandedRows.includes(rowId)
-        ? this.expandedRows.filter((id) => id !== rowId)
-        : [...this.expandedRows, rowId];
-    },
 
     toggleFilter(prop) {
       this[prop] = !this[prop];
@@ -27,15 +19,11 @@ document.addEventListener('alpine:init', () => {
       this.sortBy = value;
     },
 
-    isExpanded(rowId) {
-      return this.expandedRows.includes(rowId);
-    },
-
     rowVisible(el) {
       const sev = el.dataset.severity;
       const val = el.dataset.validation;
       const noSevFilter =
-        !this.filterStop && !this.filterWarning && !this.filterCaution && !this.filterNeutral && !this.filterRelated;
+        !this.filterStop && !this.filterWarning && !this.filterCaution && !this.filterNeutral;
       const noValFilter = !this.filterAgree && !this.filterUnverified && !this.filterDisagree;
 
       if (!noSevFilter) {
@@ -43,8 +31,7 @@ document.addEventListener('alpine:init', () => {
           (this.filterStop && sev === 'stop') ||
           (this.filterWarning && sev === 'warning') ||
           (this.filterCaution && sev === 'caution') ||
-          (this.filterNeutral && sev === 'neutral') ||
-          (this.filterRelated && sev === 'related');
+          (this.filterNeutral && sev === 'neutral');
         if (!sevMatch) return false;
       }
 
@@ -99,7 +86,7 @@ document.addEventListener('alpine:init', () => {
       }
 
       const watch = (prop) => this.$watch(prop, () => this.recount());
-      ['filterStop', 'filterWarning', 'filterCaution', 'filterNeutral', 'filterRelated',
+      ['filterStop', 'filterWarning', 'filterCaution', 'filterNeutral',
        'filterAgree', 'filterUnverified', 'filterDisagree'].forEach(watch);
     },
   }));

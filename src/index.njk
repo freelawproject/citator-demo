@@ -4,11 +4,18 @@ title: Search
 scripts:
   - /assets/js/alpine/components/search_filter.js
 ---
-{% from "macros/treatment.njk" import severityBadge, treatmentLine %}
+{% from "macros/treatment.njk" import severityBadge, treatmentLine, emptyTreatmentBadge %}
 
-{% set courts = [] %}
+{# Filter the canonical courts list to just the courts present in the
+   current scoped index. Preserves the level-then-alphabetical sort from
+   _data/courts.json. #}
+{% set scopedCourtKeys = [] %}
 {% for case in index %}
-  {% if case.court not in courts %}{% set _ = courts.push(case.court) %}{% endif %}
+  {% if case.court not in scopedCourtKeys %}{% set _ = scopedCourtKeys.push(case.court) %}{% endif %}
+{% endfor %}
+{% set scopedCourts = [] %}
+{% for c in courts %}
+  {% if c.key in scopedCourtKeys %}{% set _ = scopedCourts.push(c) %}{% endif %}
 {% endfor %}
 
 <div x-data="searchFilter()">
@@ -18,37 +25,157 @@ scripts:
     <aside aria-label="Filters" class="md:sticky md:top-6 md:self-start">
       <h2 class="text-xs uppercase tracking-wide text-greyscale-500 font-semibold">Filters</h2>
 
-      <fieldset class="mt-3">
-        <legend class="block text-sm font-medium text-greyscale-700">Court</legend>
-        <div class="mt-2 flex flex-col gap-2">
-          {% set courtNames = { "scotus": "U.S. Supreme Court", "ca1": "First Circuit", "ca2": "Second Circuit", "ca3": "Third Circuit", "ca4": "Fourth Circuit", "ca5": "Fifth Circuit", "ca6": "Sixth Circuit", "ca7": "Seventh Circuit", "ca8": "Eighth Circuit", "ca9": "Ninth Circuit", "ca10": "Tenth Circuit", "ca11": "Eleventh Circuit", "cadc": "D.C. Circuit", "cafc": "Federal Circuit" } %}
-          {% for c in courts %}
-          <label class="inline-flex items-center gap-2 text-sm text-greyscale-700">
-            <input
-              type="checkbox"
-              x-on:change="toggleCourt('{{ c }}', $event.target.checked)"
-              class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
-            {{ courtNames[c] or c }}
-          </label>
-          {% endfor %}
-        </div>
-      </fieldset>
+      <div class="mt-3 border-t border-greyscale-200 pt-5">
+        <span class="block text-xs font-bold uppercase tracking-wider text-greyscale-800">Court</span>
+        <div class="mt-2 flex flex-col gap-3">
+          {% for jurisdiction in court_jurisdictions %}
+            {# Walk every category in this jurisdiction, then every
+               scoped court within each category. Build the per-level
+               key lists so the parent checkboxes can bulk-toggle. #}
+            {% set jurisdictionBuckets = [] %}
+            {% set jurisdictionKeys = [] %}
+            {% for category in court_categories %}
+              {% if category.jurisdiction == jurisdiction.key %}
+                {% set bucket = [] %}
+                {% for c in scopedCourts %}
+                  {% if c.category == category.key %}{% set _ = bucket.push(c) %}{% endif %}
+                {% endfor %}
+                {% if bucket | length > 0 %}
+                  {% set _ = jurisdictionBuckets.push({"category": category, "courts": bucket}) %}
+                  {% for c in bucket %}{% set _ = jurisdictionKeys.push(c.key) %}{% endfor %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
 
-      <fieldset class="mt-5">
-        <legend class="block text-sm font-medium text-greyscale-700">Severity</legend>
-        <div class="mt-2 flex flex-col gap-2">
-          {% set tiers = [{"label": "Stop", "prop": "filterStop"}, {"label": "Warning", "prop": "filterWarning"}, {"label": "Caution", "prop": "filterCaution"}, {"label": "Neutral", "prop": "filterNeutral"}] %}
-          {% for t in tiers %}
-          <label class="inline-flex items-center gap-2 text-sm text-greyscale-700">
-            <input
-              type="checkbox"
-              x-on:change="{{ t.prop }} = $event.target.checked"
-              class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
-            {{ t.label }}
-          </label>
+            {% if jurisdictionBuckets | length > 0 %}
+              {% set jurKeysCsv = jurisdictionKeys | join(',') %}
+              <div>
+                {# Tier 1 — jurisdiction parent (Federal / State) #}
+                <label class="inline-flex items-center gap-2 text-sm font-semibold text-greyscale-800">
+                  <input
+                    type="checkbox"
+                    data-court-keys="{{ jurKeysCsv }}"
+                    x-effect="$el.indeterminate = isCategoryPartial($el.dataset.courtKeys.split(','))"
+                    x-bind:checked="isCategoryAll($el.dataset.courtKeys.split(','))"
+                    x-on:change="toggleCategory($el.dataset.courtKeys.split(','), $event.target.checked)"
+                    class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
+                  {{ jurisdiction.display }}
+                </label>
+                <div class="mt-1.5 ml-6 flex flex-col gap-2">
+                  {% for entry in jurisdictionBuckets %}
+                    {% set bucket = entry.courts %}
+                    {% set categoryKeys = [] %}
+                    {% for c in bucket %}{% set _ = categoryKeys.push(c.key) %}{% endfor %}
+                    {% set catKeysCsv = categoryKeys | join(',') %}
+                    {# Drop the redundant child row when a category has
+                       exactly one court whose display name matches the
+                       category name (e.g. SCOTUS). Otherwise show
+                       category parent + each court below. #}
+                    {% set hideChildren = bucket | length == 1 and bucket[0].display == entry.category.display %}
+                    <div>
+                      {# Tier 2 — category parent (e.g. U.S. Circuit courts).
+                         When the category has children to show, the row gets
+                         a chevron toggle that expands/collapses tier 3. #}
+                      <div class="flex items-center justify-between gap-2">
+                        <label class="inline-flex items-center gap-2 text-sm font-medium text-greyscale-700 flex-1">
+                          <input
+                            type="checkbox"
+                            data-court-keys="{{ catKeysCsv }}"
+                            x-effect="$el.indeterminate = isCategoryPartial($el.dataset.courtKeys.split(','))"
+                            x-bind:checked="isCategoryAll($el.dataset.courtKeys.split(','))"
+                            x-on:change="toggleCategory($el.dataset.courtKeys.split(','), $event.target.checked)"
+                            class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
+                          {{ entry.category.display }}
+                        </label>
+                        {% if not hideChildren %}
+                        <button
+                          type="button"
+                          x-on:click="toggleExpanded('{{ entry.category.key }}')"
+                          x-bind:aria-expanded="isExpanded('{{ entry.category.key }}') ? 'true' : 'false'"
+                          aria-label="Toggle {{ entry.category.display }}"
+                          class="p-1 -m-1 text-greyscale-500 hover:text-greyscale-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 rounded"
+                        >
+                          <svg
+                            x-bind:class="isExpanded('{{ entry.category.key }}') ? 'rotate-180' : ''"
+                            class="w-4 h-4 transition-transform"
+                            viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                          </svg>
+                        </button>
+                        {% endif %}
+                      </div>
+                      {% if not hideChildren %}
+                      <div x-show="isExpanded('{{ entry.category.key }}')" x-cloak class="mt-1 ml-6 flex flex-col gap-1.5">
+                        {% for c in bucket %}
+                        {# Tier 3 — individual court #}
+                        <label class="inline-flex items-center gap-2 text-sm text-greyscale-600">
+                          <input
+                            type="checkbox"
+                            x-bind:checked="selectedCourts.includes('{{ c.key }}')"
+                            x-on:change="toggleCourt('{{ c.key }}', $event.target.checked)"
+                            class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
+                          {{ c.display }}
+                        </label>
+                        {% endfor %}
+                      </div>
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endif %}
           {% endfor %}
         </div>
-      </fieldset>
+      </div>
+
+      {% set dhTiers = [
+        {"label": "Stop", "prop": "filterDhStop"},
+        {"label": "Warning", "prop": "filterDhWarning"},
+        {"label": "Caution", "prop": "filterDhCaution"},
+        {"label": "Neutral", "prop": "filterDhNeutral"}
+      ] %}
+      {% set crTiers = [
+        {"label": "Stop", "prop": "filterCrStop"},
+        {"label": "Warning", "prop": "filterCrWarning"},
+        {"label": "Caution", "prop": "filterCrCaution"},
+        {"label": "Neutral", "prop": "filterCrNeutral"}
+      ] %}
+
+      <div class="mt-6 border-t border-greyscale-200 pt-5">
+        <span class="block text-xs font-bold uppercase tracking-wider text-greyscale-800">Severity</span>
+        <div class="mt-3 grid grid-cols-2 gap-x-4">
+          <span class="text-xs font-medium text-greyscale-600">Direct history</span>
+          <span class="text-xs font-medium text-greyscale-600">Citing reference</span>
+        </div>
+        <div class="mt-3 grid grid-cols-2 gap-x-4">
+          <fieldset class="flex flex-col gap-2">
+            <legend class="sr-only">Direct history severity</legend>
+            {% for t in dhTiers %}
+            <label class="inline-flex items-center gap-2 text-sm text-greyscale-700">
+              <input
+                type="checkbox"
+                x-bind:checked="{{ t.prop }}"
+                x-on:change="setSevFilter('{{ t.prop }}', $event.target.checked)"
+                class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
+              {{ t.label }}
+            </label>
+            {% endfor %}
+          </fieldset>
+          <fieldset class="flex flex-col gap-2">
+            <legend class="sr-only">Citing reference severity</legend>
+            {% for t in crTiers %}
+            <label class="inline-flex items-center gap-2 text-sm text-greyscale-700">
+              <input
+                type="checkbox"
+                x-bind:checked="{{ t.prop }}"
+                x-on:change="setSevFilter('{{ t.prop }}', $event.target.checked)"
+                class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
+              {{ t.label }}
+            </label>
+            {% endfor %}
+          </fieldset>
+        </div>
+      </div>
 
       <p
         role="status"
@@ -60,39 +187,79 @@ scripts:
     </aside>
 
     <div>
+      <label class="block mb-6">
+        <span class="sr-only">Search by case name</span>
+        <span class="relative block">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-greyscale-400 pointer-events-none" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="9" cy="9" r="6" />
+            <path stroke-linecap="round" d="m14 14 4 4" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search by case name…"
+            x-bind:value="query"
+            x-on:input.debounce.150ms="setQuery($event.target.value)"
+            class="block w-full rounded-lg border border-greyscale-300 bg-white pl-10 pr-3 py-2.5 text-sm text-greyscale-900 placeholder:text-greyscale-400 focus:outline-none focus:border-primary-500 focus-visible:ring-4 focus-visible:ring-primary-300"
+          >
+        </span>
+      </label>
       <ul role="list" class="list-none pl-0 flex flex-col gap-4 m-0">
       {% for case in index %}
+      {% set dh = case.summary.direct_history %}
+      {% set cr = case.summary.most_severe_treatment %}
       <li
         data-court="{{ case.court }}"
-        data-severity="{{ case.summary.headline.severity | lower if case.summary.headline else 'none' }}"
-        x-show="(selectedCourts.length === 0 || selectedCourts.includes($el.dataset.court)) && ((!filterStop && !filterWarning && !filterCaution && !filterNeutral) || (filterStop && $el.dataset.severity === 'stop') || (filterWarning && $el.dataset.severity === 'warning') || (filterCaution && $el.dataset.severity === 'caution') || (filterNeutral && $el.dataset.severity === 'neutral'))"
+        data-case-name="{{ case.case_name | lower }}"
+        data-dh-severity="{{ case.summary.dh_severity | lower if case.summary.dh_severity else 'none' }}"
+        data-cr-severity="{{ case.summary.cr_severity | lower if case.summary.cr_severity else 'none' }}"
+        x-show="rowVisible($el)"
         class="bg-white rounded-2xl border border-greyscale-200 p-6 md:p-7 transition-shadow hover:shadow-sm"
       >
-        <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-          <h3 class="text-xl font-semibold leading-tight">
-            <a href="/opinion/{{ case.cluster_id }}/" class="text-greyscale-900 hover:text-primary-700 hover:underline">{{ case.case_name }}</a>
-          </h3>
-          {% if case.summary.headline %}
-            {{ treatmentLine(case.summary.headline) }}
-          {% endif %}
+        <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div class="flex-1 min-w-0">
+            <h3 class="text-xl font-semibold leading-tight">
+              <a href="/opinion/{{ case.cluster_id }}/" class="text-greyscale-900 hover:text-primary-700 hover:underline">{{ case.case_name }}</a>
+            </h3>
+            <dl class="mt-2 flex flex-wrap gap-x-10 gap-y-1 text-xs uppercase tracking-wide text-greyscale-500">
+              <div class="inline-flex gap-1.5">
+                <dt class="font-semibold">Court</dt>
+                <dd class="font-normal normal-case tracking-normal text-greyscale-700">{{ case.court_display }}</dd>
+              </div>
+              <div class="inline-flex gap-1.5">
+                <dt class="font-semibold">File Date</dt>
+                <dd class="font-normal normal-case tracking-normal text-greyscale-700">{{ case.date_filed }}</dd>
+              </div>
+            </dl>
+            {% if case.docket_number %}
+            <dl class="mt-1 flex flex-wrap gap-x-10 text-xs uppercase tracking-wide text-greyscale-500">
+              <div class="inline-flex gap-1.5">
+                <dt class="font-semibold">Docket Number</dt>
+                <dd class="font-normal normal-case tracking-normal text-greyscale-700">{{ case.docket_number }}</dd>
+              </div>
+            </dl>
+            {% endif %}
+          </div>
+          <div class="shrink-0 max-w-xs grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-2 items-center">
+            <span class="text-xs font-semibold uppercase tracking-wide text-greyscale-500">Direct history</span>
+            <div>
+              {% if dh %}
+                {{ treatmentLine(dh) }}
+              {% elif case.is_court_of_last_resort %}
+                {{ emptyTreatmentBadge("Not applicable", "verified", case.court_display ~ " is a court of last resort. Decisions from this court are not subject to direct appellate review.") }}
+              {% else %}
+                {{ emptyTreatmentBadge("None identified", "unverified", "No higher-court appellate history has been identified for this opinion.") }}
+              {% endif %}
+            </div>
+            <span class="text-xs font-semibold uppercase tracking-wide text-greyscale-500">Citing reference</span>
+            <div>
+              {% if cr %}
+                {{ treatmentLine(cr) }}
+              {% else %}
+                {{ emptyTreatmentBadge("None identified", "unverified", "No negative citing references identified for this opinion.") }}
+              {% endif %}
+            </div>
+          </div>
         </div>
-
-        <dl class="mt-2 flex flex-wrap gap-x-10 gap-y-1 text-xs uppercase tracking-wide text-greyscale-500">
-          <div class="inline-flex gap-1.5">
-            <dt class="font-semibold">Court</dt>
-            <dd class="font-normal normal-case tracking-normal text-greyscale-700">{{ case.court_display }}</dd>
-          </div>
-          <div class="inline-flex gap-1.5">
-            <dt class="font-semibold">File Date</dt>
-            <dd class="font-normal normal-case tracking-normal text-greyscale-700">{{ case.date_filed }}</dd>
-          </div>
-          {% if case.docket_number %}
-          <div class="inline-flex gap-1.5">
-            <dt class="font-semibold">Docket Number</dt>
-            <dd class="font-normal normal-case tracking-normal text-greyscale-700">{{ case.docket_number }}</dd>
-          </div>
-          {% endif %}
-        </dl>
 
         {% if case.excerpt %}
         <p class="mt-4 text-sm text-greyscale-600 leading-relaxed border-l-2 border-greyscale-200 pl-3">{{ case.excerpt }}</p>

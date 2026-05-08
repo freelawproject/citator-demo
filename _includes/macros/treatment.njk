@@ -214,23 +214,30 @@ Expert: {{ expert_treatment }}{% endset %}
       role="dialog"
       class="absolute z-30 top-full right-0 mt-1 w-max max-w-[300px] rounded-lg border border-greyscale-200 bg-white shadow-lg px-3 py-2 text-xs leading-snug text-greyscale-900"
     >
-      {% if pointer.is_scoped %}
-        <a href="/opinion/{{ pointer.citing_cluster_id }}/" class="block font-semibold text-sm leading-snug text-greyscale-900 hover:text-primary-700 hover:underline">{{ pointer.citing_case_name }}</a>
+      {% if pointer.severity == "Neutral" and pointer.treatment == "Cited by" %}
+        {# Neutral fallback — the pointer is one of potentially many
+           neutral citing references. Surfacing a single case's metadata
+           would misrepresent that. Explain absence-of-negatives instead. #}
+        <span class="block text-greyscale-700 leading-relaxed">No negative treatments have been identified for this opinion. See the Cited By tab on the opinion page for the full list of citing cases.</span>
       {% else %}
-        <span class="block font-semibold text-sm leading-snug text-greyscale-900">{{ pointer.citing_case_name }}</span>
+        {% if pointer.is_scoped %}
+          <a href="/opinion/{{ pointer.citing_cluster_id }}/" class="block font-semibold text-sm leading-snug text-greyscale-900 hover:text-primary-700 hover:underline">{{ pointer.citing_case_name }}</a>
+        {% else %}
+          <span class="block font-semibold text-sm leading-snug text-greyscale-900">{{ pointer.citing_case_name }}</span>
+        {% endif %}
+        <span class="mt-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 leading-normal">
+          <span class="text-[10px] font-semibold uppercase tracking-wide text-greyscale-500">Court</span>
+          <span>{{ pointer.citing_court_display }}</span>
+          <span class="text-[10px] font-semibold uppercase tracking-wide text-greyscale-500">File Date</span>
+          <span>{{ pointer.citing_date_filed }}</span>
+        </span>
       {% endif %}
-      <span class="mt-2 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 leading-normal">
-        <span class="text-[10px] font-semibold uppercase tracking-wide text-greyscale-500">Court</span>
-        <span>{{ pointer.citing_court_display }}</span>
-        <span class="text-[10px] font-semibold uppercase tracking-wide text-greyscale-500">File Date</span>
-        <span>{{ pointer.citing_date_filed }}</span>
-      </span>
     </div>
   </div>
 {% endmacro %}
 
 {# Muted-grey badge for empty-state slots (no Direct history pointer, no
-   negative Citing reference). Shows lean placeholder text on the badge
+   Citing reference at all). Shows lean placeholder text on the badge
    with the full explainer in a click-dropdown. The check / question
    icon sits to the right of the badge — outside the badge box —
    mirroring how validationDot is positioned next to a real treatment.

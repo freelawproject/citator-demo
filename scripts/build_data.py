@@ -501,49 +501,45 @@ def _summary_pointer_from_view(view_row: dict) -> dict:
 def build_summary(cited_by_sorted: list[dict]) -> dict:
     """Compute the two FK pointers per the production CitatorClusterSummary
     spec (FK-only flavor — no denormalized counts/dates; see db_design.md
-    § Cluster summaries)."""
-    citing_negative = [
-        cb
-        for cb in cited_by_sorted
-        if cb["direction"] != "Direct History"
-        and cb["severity"] in NEGATIVE_TIERS
+    § Cluster summaries).
+
+    `most_severe_treatment` surfaces the most-severe non-direct cited_by
+    row when negatives exist, otherwise falls through to the most-recent
+    neutral "Cited by" — so a case that's been cited (even just neutrally)
+    shows a real treatment badge rather than a "None identified" empty
+    state. Empty state remains for the truly uncited case (issue #36).
+    """
+    citing_any = [
+        cb for cb in cited_by_sorted if cb["direction"] != "Direct History"
     ]
-    most_severe = (
-        _summary_pointer_from_view(citing_negative[0])
-        if citing_negative
-        else None
-    )
+    citing_negative = [
+        cb for cb in citing_any if cb["severity"] in NEGATIVE_TIERS
+    ]
+    if citing_negative:
+        most_severe = _summary_pointer_from_view(citing_negative[0])
+    elif citing_any:
+        # No negative non-direct row; fall through to the most-recent
+        # neutral. cited_by_sorted is severity-asc-then-date-desc, so the
+        # first entry of citing_any when negatives are absent is the most
+        # recent neutral row.
+        most_severe = _summary_pointer_from_view(citing_any[0])
+    else:
+        most_severe = None
 
     direct = [
         cb for cb in cited_by_sorted if cb["direction"] == "Direct History"
     ]
     direct_history = _summary_pointer_from_view(direct[0]) if direct else None
 
-    # Headline for search-results card: prefer most-severe negative; else
-    # direct-history (any tier); else latest cited_by entry.
-    headline = most_severe
-    if headline is None and direct_history is not None:
-        headline = direct_history
-    if headline is None and cited_by_sorted:
-        latest_any = max(cited_by_sorted, key=lambda r: r["citing_date_filed"])
-        headline = _summary_pointer_from_view(latest_any)
-
-    # `cr_severity` is the most-severe NON-direct-history cited_by tier
-    # (any tier including Neutral). Used by the search-results filter
-    # rail's tabbed severity filter — distinct from `most_severe_treatment`,
-    # which is restricted to negative tiers and drives the opinion-page
-    # summary picker.
-    citing_any = [
-        cb for cb in cited_by_sorted if cb["direction"] != "Direct History"
-    ]
+    # `cr_severity` / `dh_severity` are the most-severe non-direct /
+    # direct-history cited_by tiers (any tier including Neutral). Used by
+    # the search-results filter rail's severity filter.
     cr_severity = citing_any[0]["severity"] if citing_any else None
-
     dh_severity = direct[0]["severity"] if direct else None
 
     return {
         "most_severe_treatment": most_severe,
         "direct_history": direct_history,
-        "headline": headline,
         "dh_severity": dh_severity,
         "cr_severity": cr_severity,
     }

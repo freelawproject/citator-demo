@@ -82,10 +82,13 @@ Expert: {{ expert_treatment }}{% endset %}
    when the card sits inside an external picker that already labels it. #}
 {% macro treatmentBlock(pointer, label="") %}
   {% set vstate = indicatorState(pointer.source, pointer.treatment, pointer.expert_treatment) | trim %}
-  <article class="rounded-2xl border border-greyscale-200 bg-white px-5 py-4">
+  <article class="rounded-2xl border border-greyscale-200 bg-white overflow-hidden">
     {% if label %}
-    <p class="text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">{{ label }}</p>
+    <div class="bg-greyscale-50 border-b border-greyscale-200 px-5 py-2.5">
+      <h3 class="text-xs font-semibold uppercase tracking-wide text-greyscale-700">{{ label }}</h3>
+    </div>
     {% endif %}
+    <div class="px-5 py-4">
     <div class="flex flex-wrap items-center gap-x-2 gap-y-2">
       {{ severityBadge(pointer.severity, pointer.treatment) }}
       <span class="font-semibold text-greyscale-900">
@@ -164,6 +167,7 @@ Expert: {{ expert_treatment }}{% endset %}
       </p>
     </details>
     {% endif %}
+    </div>
   </article>
 {% endmacro %}
 

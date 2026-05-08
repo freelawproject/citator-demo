@@ -61,49 +61,62 @@ eleventyComputed:
        users can sort the Cited By tab for the full list. #}
     <div class="grid gap-4 md:grid-cols-2">
       <div class="flex flex-col [&>article]:flex-1">
-        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-greyscale-500">Direct history</h3>
         {% if dh %}
-          {{ treatmentBlock(dh, "") }}
+          {{ treatmentBlock(dh, "Direct history") }}
         {% else %}
-          <article class="rounded-2xl border border-greyscale-200 bg-white px-5 py-4">
-            {% if opinion.is_court_of_last_resort %}
-            {{ emptyTreatmentInline("Not applicable", "verified") }}
-            <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
-              <span class="font-semibold text-greyscale-900">{{ opinion.court_display }}</span> is a court of last resort. Decisions from this court are not subject to direct appellate review.
-            </p>
-            {% else %}
-            {{ emptyTreatmentInline("None identified", "unverified") }}
-            <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
-              No higher-court appellate history has been identified for this opinion.
-            </p>
-            {% endif %}
+          <article class="rounded-2xl border border-greyscale-200 bg-white overflow-hidden">
+            <div class="bg-greyscale-50 border-b border-greyscale-200 px-5 py-2.5">
+              <h3 class="text-xs font-semibold uppercase tracking-wide text-greyscale-700">Direct history</h3>
+            </div>
+            <div class="px-5 py-4">
+              {% if opinion.is_court_of_last_resort %}
+              {{ emptyTreatmentInline("Not applicable", "verified") }}
+              <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
+                <span class="font-semibold text-greyscale-900">{{ opinion.court_display }}</span> is a court of last resort. Decisions from this court are not subject to direct appellate review.
+              </p>
+              {% else %}
+              {{ emptyTreatmentInline("None identified", "unverified") }}
+              <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
+                No higher-court appellate history has been identified for this opinion.
+              </p>
+              {% endif %}
+            </div>
           </article>
         {% endif %}
       </div>
 
       <div class="flex flex-col [&>article]:flex-1">
-        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-greyscale-500">Citing reference</h3>
         {% if cr %}
           {% if cr.severity == "Neutral" and cr.treatment == "Cited by" %}
             {# Neutral fallback — surfacing one specific neutral citing
                case as "the citing reference" would misrepresent it as
                singular when it's just one of potentially many. Show an
                explanation instead and point to the Cited By tab. #}
-            <article class="rounded-2xl border border-greyscale-200 bg-white px-5 py-4">
-              {{ emptyTreatmentInline("Cited by", "verified") }}
-              <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
-                No negative treatments have been identified for this opinion. See the Cited By tab below for the full list of citing cases.
-              </p>
+            <article class="rounded-2xl border border-greyscale-200 bg-white overflow-hidden">
+              <div class="bg-greyscale-50 border-b border-greyscale-200 px-5 py-2.5">
+                <h3 class="text-xs font-semibold uppercase tracking-wide text-greyscale-700">Citing reference</h3>
+              </div>
+              <div class="px-5 py-4">
+                {{ emptyTreatmentInline("Cited by", "verified") }}
+                <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
+                  No negative treatments have been identified for this opinion. See the Cited By tab below for the full list of citing cases.
+                </p>
+              </div>
             </article>
           {% else %}
-            {{ treatmentBlock(cr, "") }}
+            {{ treatmentBlock(cr, "Citing reference") }}
           {% endif %}
         {% else %}
-          <article class="rounded-2xl border border-greyscale-200 bg-white px-5 py-4">
-            {{ emptyTreatmentInline("None identified", "unverified") }}
-            <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
-              No citing references have been identified for this opinion.
-            </p>
+          <article class="rounded-2xl border border-greyscale-200 bg-white overflow-hidden">
+            <div class="bg-greyscale-50 border-b border-greyscale-200 px-5 py-2.5">
+              <h3 class="text-xs font-semibold uppercase tracking-wide text-greyscale-700">Citing reference</h3>
+            </div>
+            <div class="px-5 py-4">
+              {{ emptyTreatmentInline("None identified", "unverified") }}
+              <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
+                No citing references have been identified for this opinion.
+              </p>
+            </div>
           </article>
         {% endif %}
       </div>

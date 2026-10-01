@@ -42,3 +42,6 @@ data-source/
 
 # Pre-commit
 .pre-commit-cache/
+
+# Local Netlify folder
+.netlify

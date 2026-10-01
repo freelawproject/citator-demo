@@ -171,8 +171,25 @@ Python tests and a full build from the fixtures, then checks the output.
 
 The site is hosted on Netlify. The real data is not in the repository
 and the data step takes several minutes, so the site is built locally
-and the `_site/` folder is deployed as-is (Netlify CLI
-`netlify deploy --prod --dir=_site`, or a manual upload).
+and the `_site/` folder is uploaded as-is. Netlify's own git builds are
+turned off for the site; pull requests are checked by GitHub Actions
+instead.
+
+```bash
+# once per machine: sign in and link this folder to the Netlify site
+npx netlify-cli login
+npx netlify-cli link
+
+# publish: stop any running `npm run dev` first, then build and upload
+npm run build
+npx netlify-cli deploy --prod --dir=_site
+```
+
+Run both commands from the project root. The link is stored in
+`.netlify/` (gitignored). Dropping `--prod` uploads a preview at a
+unique URL without replacing the live site. A running dev server
+rewrites `_site/` from its own cached state, so it must be stopped
+before the build that gets published.
 
 ## License
 

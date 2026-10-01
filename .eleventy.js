@@ -1,18 +1,20 @@
 /**
  * Eleventy configuration.
  *
- * Source layout:
- *   _data/         — JSON data files (opinions/, index.json) consumed by templates
- *   _includes/     — partials (layouts, components)
- *   assets/        — static assets (css, js, images)
- *   src/           — page templates (.njk)
- *   _site/         — build output (gitignored)
+ *   src/        page templates (.njk)
+ *   _includes/  layouts, partials and macros
+ *   _data/      JSON written by scripts/build_data.py
+ *   assets/     stylesheet source, fonts, Alpine components
+ *   _site/      build output (gitignored)
  */
 module.exports = function (eleventyConfig) {
-  // Pass-through copy: assets and bundled JS go straight to _site/.
   eleventyConfig.addPassthroughCopy("assets/js");
   eleventyConfig.addPassthroughCopy("assets/fonts");
-  eleventyConfig.addPassthroughCopy({ "node_modules/alpinejs/dist/cdn.min.js": "assets/js/alpine.min.js" });
+  // The CSP build: templates reference component members only, so the
+  // page needs no `unsafe-eval` (same build CourtListener ships).
+  eleventyConfig.addPassthroughCopy({
+    "node_modules/@alpinejs/csp/dist/cdn.min.js": "assets/js/alpine.min.js",
+  });
 
   return {
     dir: {

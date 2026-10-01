@@ -1,6 +1,3 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
-exclude: migrations
 default_language_version:
   python: "python3.13"
 ci:
@@ -14,13 +11,10 @@ repos:
      - id: check-json
      - id: check-merge-conflict
      - id: check-toml
-     - id: check-xml
      - id: check-yaml
      - id: debug-statements
      - id: detect-private-key
      - id: fix-byte-order-marker
-     - id: fix-encoding-pragma
-       args: [--remove]
      - id: trailing-whitespace
        args: [--markdown-linebreak-ext=md]
 

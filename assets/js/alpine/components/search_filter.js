@@ -1,226 +1,357 @@
+/*
+Home page: the search box, the court picker, the severity filters,
+"anchor opinions only" and pagination over the filtered cards.
+
+Markup contract (src/index.njk):
+  - cards carry data-court, data-tier, data-search, data-disp-severity,
+    data-dh-severity, data-cr-severity
+  - the anchors checkbox and the severity toggles carry data-filter (a
+    property name)
+  - picker tabs and panels carry data-tab-key; court rows carry
+    data-court-key and data-court-name; group heads carry data-court-keys
+    and data-court-names
+Filter state lives in the URL query string (mirrored to sessionStorage
+for back-navigation) so a filtered list can be shared and restored.
+*/
+const PAGE_SIZE = 10;
+const STORAGE_KEY = 'citatorSearchFilter';
+const DISP_FILTERS = [
+  'filterDispStop', 'filterDispWarning', 'filterDispCaution', 'filterDispNeutral', 'filterDispPositive',
+];
+const DH_FILTERS = ['filterDhStop', 'filterDhWarning', 'filterDhCaution', 'filterDhNeutral', 'filterDhPositive'];
+const CR_FILTERS = ['filterCrStop', 'filterCrWarning', 'filterCrCaution', 'filterCrNeutral', 'filterCrPositive'];
+const TIERS = ['stop', 'warning', 'caution', 'neutral', 'positive'];
+
+function courtKeyOf(el) {
+  const holder = el.closest('[data-court-key]');
+  return holder ? holder.dataset.courtKey : '';
+}
+
 document.addEventListener('alpine:init', () => {
   Alpine.data('searchFilter', () => ({
     query: '',
+    // the query reduced to letters and digits, matched against data-search
+    queryKey: '',
     selectedCourts: [],
-    // Severity filters are split by direction (Direct history vs Citing
-    // reference). Both sets are independent — a row must satisfy any
-    // active filter in each direction it's filtered on.
+    filterDispStop: false,
+    filterDispWarning: false,
+    filterDispCaution: false,
+    filterDispNeutral: false,
+    filterDispPositive: false,
     filterDhStop: false,
     filterDhWarning: false,
     filterDhCaution: false,
     filterDhNeutral: false,
+    filterDhPositive: false,
     filterCrStop: false,
     filterCrWarning: false,
     filterCrCaution: false,
     filterCrNeutral: false,
+    filterCrPositive: false,
+    filterAnchorsOnly: true,
     totalCount: 0,
     visibleCount: 0,
+    page: 0,
+    pageCount: 1,
+    pickerOpen: false,
+    pickerTab: 'federal_appellate',
+    pickerQuery: '',
+    // court key → display name, read off the picker markup in init()
+    courtNames: {},
 
-    setQuery(value) {
-      this.query = (value || '').trim().toLowerCase();
+    // ── state changes ──────────────────────────────────────────────────
+    // every change resets to the first page and is written to the URL
+    changed() {
+      this.page = 0;
       this.syncToURL();
       this.recount();
     },
 
-    toggleCourt(court, checked) {
-      this.selectedCourts = checked
-        ? [...this.selectedCourts.filter((c) => c !== court), court]
-        : this.selectedCourts.filter((c) => c !== court);
-      this.syncToURL();
-      this.recount();
+    // typed text is reduced the way build_data.search_text reduces the
+    // cards, so "103 F.3d 888" and "103f3d888" match the same case
+    normalize(value) {
+      return (value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    },
+    setQuery(event) {
+      this.query = (event.target.value || '').trim().toLowerCase();
+      this.queryKey = this.normalize(this.query);
+      this.changed();
+    },
+    get filterChecked() {
+      return this[this.$el.dataset.filter];
+    },
+    // the severity pill toggles
+    get filterOn() {
+      return this[this.$el.dataset.filter] ? 'true' : 'false';
+    },
+    get filterClass() {
+      return this[this.$el.dataset.filter] ? 'is-on' : '';
+    },
+    toggleFilter() {
+      const prop = this.$el.dataset.filter;
+      this[prop] = !this[prop];
+      this.changed();
+    },
+    setAnchorsOnly(event) {
+      this.filterAnchorsOnly = event.target.checked;
+      this.changed();
+    },
+    get hasSeverityFilters() {
+      return [...DISP_FILTERS, ...DH_FILTERS, ...CR_FILTERS].some((p) => this[p]);
+    },
+    clearSeverityFilters() {
+      [...DISP_FILTERS, ...DH_FILTERS, ...CR_FILTERS].forEach((p) => {
+        this[p] = false;
+      });
+      this.changed();
     },
 
-    setSevFilter(prop, checked) {
-      this[prop] = checked;
-      this.syncToURL();
-      this.recount();
+    // ── courts ─────────────────────────────────────────────────────────
+    setCourts(keys) {
+      this.selectedCourts = [...new Set(keys)];
+      this.changed();
+    },
+    get courtSelected() {
+      return this.selectedCourts.includes(courtKeyOf(this.$el));
+    },
+    toggleCourt(event) {
+      const key = courtKeyOf(event.target);
+      const rest = this.selectedCourts.filter((c) => c !== key);
+      this.setCourts(event.target.checked ? [...rest, key] : rest);
+    },
+    removeCourt() {
+      const key = courtKeyOf(this.$el);
+      this.setCourts(this.selectedCourts.filter((c) => c !== key));
+    },
+    get hasSelectedCourts() {
+      return this.selectedCourts.length > 0;
+    },
+    get courtSummary() {
+      const n = this.selectedCourts.length;
+      if (n === 0) return 'All courts';
+      if (n === 1) return this.courtNames[this.selectedCourts[0]] || '1 court';
+      return `${n} courts`;
+    },
+    courtKeysIn(scope) {
+      return [...scope.querySelectorAll('[data-court-key]')].map((el) => el.dataset.courtKey);
+    },
+    checkAllCourts() {
+      this.setCourts(this.courtKeysIn(this.$root));
+    },
+    clearAllCourts() {
+      this.setCourts([]);
+    },
+    currentPanel() {
+      return this.$root.querySelector(`[data-tab-key="${this.pickerTab}"]`);
+    },
+    checkTabCourts() {
+      const panel = this.currentPanel();
+      if (panel) this.setCourts([...this.selectedCourts, ...this.courtKeysIn(panel)]);
+    },
+    clearTabCourts() {
+      const panel = this.currentPanel();
+      if (!panel) return;
+      const dropped = new Set(this.courtKeysIn(panel));
+      this.setCourts(this.selectedCourts.filter((k) => !dropped.has(k)));
     },
 
-    // ── Court-category bulk helpers ────────────────────────────────────
-    isCategoryAll(keys) {
+    // a group head (a state, or a federal category) checks all its courts
+    groupKeys(el) {
+      return (el.dataset.courtKeys || '').split(',').filter(Boolean);
+    },
+    get groupAllSelected() {
+      const keys = this.groupKeys(this.$el);
       return keys.length > 0 && keys.every((k) => this.selectedCourts.includes(k));
     },
-
-    isCategoryPartial(keys) {
+    syncGroupBox() {
+      const keys = this.groupKeys(this.$el);
       const some = keys.some((k) => this.selectedCourts.includes(k));
-      const all = this.isCategoryAll(keys);
-      return some && !all;
+      this.$el.indeterminate = some && !keys.every((k) => this.selectedCourts.includes(k));
     },
-
-    toggleCategory(keys, checked) {
-      if (checked) {
-        const next = new Set([...this.selectedCourts, ...keys]);
-        this.selectedCourts = [...next];
+    toggleGroup(event) {
+      const keys = this.groupKeys(event.target);
+      if (event.target.checked) {
+        this.setCourts([...this.selectedCourts, ...keys]);
       } else {
         const dropped = new Set(keys);
-        this.selectedCourts = this.selectedCourts.filter(
-          (k) => !dropped.has(k)
-        );
+        this.setCourts(this.selectedCourts.filter((k) => !dropped.has(k)));
       }
-      this.syncToURL();
-      this.recount();
     },
 
-    // ── Court-category collapse state ──────────────────────────────────
-    expandedCategories: [],
-
-    isExpanded(category) {
-      return this.expandedCategories.includes(category);
+    // ── picker dialog ──────────────────────────────────────────────────
+    openPicker() {
+      this.pickerOpen = true;
+      document.body.classList.add('is-modal-open');
+    },
+    closePicker() {
+      this.pickerOpen = false;
+      this.pickerQuery = '';
+      document.body.classList.remove('is-modal-open');
+    },
+    selectPickerTab() {
+      this.pickerTab = this.$el.dataset.tabKey;
+    },
+    get pickerTabSelected() {
+      return this.pickerTab === this.$el.dataset.tabKey ? 'true' : 'false';
+    },
+    get pickerTabClass() {
+      return this.pickerTab === this.$el.dataset.tabKey ? 'is-active' : '';
+    },
+    get pickerPanelVisible() {
+      return this.pickerTab === this.$el.dataset.tabKey;
+    },
+    setPickerQuery(event) {
+      this.pickerQuery = (event.target.value || '').trim().toLowerCase();
+    },
+    // rows and groups hide while they do not match the typed name
+    get courtVisible() {
+      return !this.pickerQuery || (this.$el.dataset.courtName || '').includes(this.pickerQuery);
+    },
+    get groupVisible() {
+      return !this.pickerQuery || (this.$el.dataset.courtNames || '').includes(this.pickerQuery);
+    },
+    get pickerTabEmpty() {
+      if (!this.pickerQuery) return false;
+      const panel = this.$el.closest('[data-tab-key]');
+      if (!panel) return false;
+      return ![...panel.querySelectorAll('[data-court-name]')].some((row) =>
+        (row.dataset.courtName || '').includes(this.pickerQuery)
+      );
     },
 
-    toggleExpanded(category) {
-      this.expandedCategories = this.isExpanded(category)
-        ? this.expandedCategories.filter((c) => c !== category)
-        : [...this.expandedCategories, category];
+    // ── cards ──────────────────────────────────────────────────────────
+    // a ticked severity in a group matches the card's value for that question
+    tierHit(group, value) {
+      return group.some((p, i) => this[p] && TIERS[i] === value);
     },
-
-    rowVisible(el) {
-      if (
-        this.selectedCourts.length > 0 &&
-        !this.selectedCourts.includes(el.dataset.court)
-      ) {
-        return false;
+    rowMatches(el) {
+      if (this.filterAnchorsOnly && el.dataset.tier !== 'anchor') return false;
+      if (this.selectedCourts.length && !this.selectedCourts.includes(el.dataset.court)) return false;
+      // the three severity groups are a union: a card shows when any
+      // ticked severity matches its disposition, appeal or later treatment
+      if (this.hasSeverityFilters) {
+        const hit =
+          this.tierHit(DISP_FILTERS, el.dataset.dispSeverity) ||
+          this.tierHit(DH_FILTERS, el.dataset.dhSeverity) ||
+          this.tierHit(CR_FILTERS, el.dataset.crSeverity);
+        if (!hit) return false;
       }
-      if (this.hasDhFilters()) {
-        const sev = el.dataset.dhSeverity;
-        const match =
-          (this.filterDhStop && sev === 'stop') ||
-          (this.filterDhWarning && sev === 'warning') ||
-          (this.filterDhCaution && sev === 'caution') ||
-          (this.filterDhNeutral && sev === 'neutral');
-        if (!match) return false;
-      }
-      if (this.hasCrFilters()) {
-        const sev = el.dataset.crSeverity;
-        const match =
-          (this.filterCrStop && sev === 'stop') ||
-          (this.filterCrWarning && sev === 'warning') ||
-          (this.filterCrCaution && sev === 'caution') ||
-          (this.filterCrNeutral && sev === 'neutral');
-        if (!match) return false;
-      }
-      if (this.query) {
-        const name = el.dataset.caseName || '';
-        if (!name.includes(this.query)) return false;
-      }
+      if (this.queryKey && !(el.dataset.search || '').includes(this.queryKey)) return false;
       return true;
     },
-
-    hasDhFilters() {
-      return (
-        this.filterDhStop || this.filterDhWarning ||
-        this.filterDhCaution || this.filterDhNeutral
-      );
+    // visible = passes the filters and falls on the current page; recount
+    // stamps each matching card with its position in the filtered list
+    get rowVisible() {
+      if (!this.rowMatches(this.$el)) return false;
+      const idx = parseInt(this.$el.dataset.pageIndex || '-1', 10);
+      return idx >= this.page * PAGE_SIZE && idx < (this.page + 1) * PAGE_SIZE;
     },
-
-    hasCrFilters() {
-      return (
-        this.filterCrStop || this.filterCrWarning ||
-        this.filterCrCaution || this.filterCrNeutral
-      );
-    },
-
     recount() {
-      const rows = this.$root.querySelectorAll('[data-court]');
       let count = 0;
-      rows.forEach((row) => {
-        if (this.rowVisible(row)) count += 1;
+      this.$root.querySelectorAll('[data-court]').forEach((row) => {
+        if (this.rowMatches(row)) {
+          row.dataset.pageIndex = String(count);
+          count += 1;
+        } else {
+          row.dataset.pageIndex = '-1';
+        }
       });
       this.visibleCount = count;
+      this.pageCount = Math.max(1, Math.ceil(count / PAGE_SIZE));
+      if (this.page > this.pageCount - 1) this.page = this.pageCount - 1;
     },
 
-    // ── URL state sync ─────────────────────────────────────────────────
+    // ── pagination ─────────────────────────────────────────────────────
+    get hasPages() {
+      return this.pageCount > 1;
+    },
+    get atFirstPage() {
+      return this.page === 0;
+    },
+    get atLastPage() {
+      return this.page >= this.pageCount - 1;
+    },
+    get pageLabel() {
+      if (!this.visibleCount) return 'No opinions match';
+      const from = this.page * PAGE_SIZE + 1;
+      const to = Math.min(this.visibleCount, (this.page + 1) * PAGE_SIZE);
+      return `${from}–${to} of ${this.visibleCount}`;
+    },
+    goToPage(page) {
+      this.page = page;
+      this.syncToURL();
+      this.recount();
+      const list = this.$root.querySelector('[role="list"]');
+      if (list) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+    nextPage() {
+      if (!this.atLastPage) this.goToPage(this.page + 1);
+    },
+    prevPage() {
+      if (!this.atFirstPage) this.goToPage(this.page - 1);
+    },
+
+    // ── URL state ──────────────────────────────────────────────────────
+    activeTiers(group) {
+      return group.filter((p) => this[p]).map((p) => TIERS[group.indexOf(p)]);
+    },
+    setTiers(group, tiers) {
+      group.forEach((p, i) => {
+        this[p] = tiers.includes(TIERS[i]);
+      });
+    },
     parseFromURL() {
       const params = new URLSearchParams(window.location.search);
-      // If the URL has no filter params, fall back to sessionStorage —
-      // covers the case where back-navigation lands on `/` after the
-      // browser drops the previously-set query string from history.
+      // with no filter params, fall back to the last saved state: the
+      // browser can drop the query string on back-navigation
       if (!params.toString()) {
-        const saved = sessionStorage.getItem('citatorSearchFilter');
-        if (saved) {
-          try {
-            const restored = new URLSearchParams(saved);
-            restored.forEach((v, k) => params.set(k, v));
-          } catch (_) { /* ignore malformed sessionStorage value */ }
-        }
+        const saved = sessionStorage.getItem(STORAGE_KEY);
+        if (saved) new URLSearchParams(saved).forEach((v, k) => params.set(k, v));
       }
       this.query = (params.get('q') || '').trim().toLowerCase();
+      this.queryKey = this.normalize(this.query);
       const courts = params.get('courts');
       this.selectedCourts = courts ? courts.split(',').filter(Boolean) : [];
-
-      const dhTiers = (params.get('dh_sev') || '').split(',').filter(Boolean);
-      this.filterDhStop = dhTiers.includes('stop');
-      this.filterDhWarning = dhTiers.includes('warning');
-      this.filterDhCaution = dhTiers.includes('caution');
-      this.filterDhNeutral = dhTiers.includes('neutral');
-
-      const crTiers = (params.get('cr_sev') || '').split(',').filter(Boolean);
-      this.filterCrStop = crTiers.includes('stop');
-      this.filterCrWarning = crTiers.includes('warning');
-      this.filterCrCaution = crTiers.includes('caution');
-      this.filterCrNeutral = crTiers.includes('neutral');
-
-      // Sync URL back if we restored from storage but URL is empty.
+      this.setTiers(DISP_FILTERS, (params.get('disp_sev') || '').split(','));
+      this.setTiers(DH_FILTERS, (params.get('dh_sev') || '').split(','));
+      this.setTiers(CR_FILTERS, (params.get('cr_sev') || '').split(','));
+      this.filterAnchorsOnly = params.get('anchors') !== '0';
+      this.page = Math.max(0, parseInt(params.get('page') || '1', 10) - 1);
       if (!window.location.search && params.toString()) {
-        const url = `${window.location.pathname}?${params.toString()}`;
+        window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+      }
+    },
+    syncToURL() {
+      const params = new URLSearchParams();
+      if (this.query) params.set('q', this.query);
+      if (this.selectedCourts.length) params.set('courts', this.selectedCourts.join(','));
+      const disp = this.activeTiers(DISP_FILTERS);
+      if (disp.length) params.set('disp_sev', disp.join(','));
+      const dh = this.activeTiers(DH_FILTERS);
+      if (dh.length) params.set('dh_sev', dh.join(','));
+      const cr = this.activeTiers(CR_FILTERS);
+      if (cr.length) params.set('cr_sev', cr.join(','));
+      if (!this.filterAnchorsOnly) params.set('anchors', '0');
+      if (this.page > 0) params.set('page', String(this.page + 1));
+      const qs = params.toString();
+      if (qs) sessionStorage.setItem(STORAGE_KEY, qs);
+      else sessionStorage.removeItem(STORAGE_KEY);
+      const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
+      if (window.location.pathname + window.location.search !== url) {
         window.history.replaceState(null, '', url);
       }
     },
 
-    syncToURL() {
-      const params = new URLSearchParams();
-      if (this.query) params.set('q', this.query);
-      if (this.selectedCourts.length) {
-        params.set('courts', this.selectedCourts.join(','));
-      }
-
-      const dhTiers = [];
-      if (this.filterDhStop) dhTiers.push('stop');
-      if (this.filterDhWarning) dhTiers.push('warning');
-      if (this.filterDhCaution) dhTiers.push('caution');
-      if (this.filterDhNeutral) dhTiers.push('neutral');
-      if (dhTiers.length) params.set('dh_sev', dhTiers.join(','));
-
-      const crTiers = [];
-      if (this.filterCrStop) crTiers.push('stop');
-      if (this.filterCrWarning) crTiers.push('warning');
-      if (this.filterCrCaution) crTiers.push('caution');
-      if (this.filterCrNeutral) crTiers.push('neutral');
-      if (crTiers.length) params.set('cr_sev', crTiers.join(','));
-
-      const qs = params.toString();
-      const url = qs
-        ? `${window.location.pathname}?${qs}`
-        : window.location.pathname;
-      // Mirror to sessionStorage so the state survives any back-nav
-      // quirk that drops the URL query string.
-      if (qs) sessionStorage.setItem('citatorSearchFilter', qs);
-      else sessionStorage.removeItem('citatorSearchFilter');
-      // Skip the replaceState call if the URL hasn't changed — avoids
-      // redundant history-state writes on hydration.
-      const currentUrl = window.location.pathname + window.location.search;
-      if (currentUrl === url) return;
-      window.history.replaceState(null, '', url);
-    },
-
     init() {
-      const rows = this.$root.querySelectorAll('[data-court]');
-      this.totalCount = rows.length;
-      this.visibleCount = rows.length;
-
+      this.totalCount = this.$root.querySelectorAll('[data-court]').length;
+      this.$root.querySelectorAll('li[data-court-key]').forEach((el) => {
+        this.courtNames[el.dataset.courtKey] =
+          el.querySelector('label')?.textContent.trim() || el.dataset.courtKey;
+      });
       this.parseFromURL();
-
-      // Initial recount after URL hydration. State changes from user
-      // interactions go through setQuery / toggleCourt / toggleCategory /
-      // setSevFilter, which each call syncToURL + recount directly —
-      // that's more reliable than $watch on array reassignment in the
-      // CSP Alpine build.
       this.recount();
-
-      // Re-hydrate from URL on bfcache restore (back/forward nav). When
-      // the browser restores the page from cache, init() doesn't re-run,
-      // but the URL still carries the persisted filter params — read
-      // them again so the UI reflects the saved state.
+      // a page restored from the back/forward cache keeps its old state;
+      // the URL still carries the saved filters, so read them again
       window.addEventListener('pageshow', (e) => {
         if (e.persisted) {
           this.parseFromURL();

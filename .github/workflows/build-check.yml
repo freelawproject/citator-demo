@@ -23,11 +23,31 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install Node deps
         run: npm ci
 
-      - name: Run full build
-        run: npm run build
+      - name: Install Python deps
+        run: uv sync --group dev
 
-      - name: Verify _site/ output exists
-        run: test -f _site/index.html && test -f _site/assets/css/styles.css
+      - name: Run Python tests
+        run: uv run pytest
+
+      # The real data is not in the repo; the fixtures exercise every
+      # template and the full data → CSS → Eleventy chain.
+      - name: Build the site from the fixtures
+        run: npm run build
+        env:
+          CITATOR_DEMO_DATA: mock
+
+      - name: Verify the output
+        run: |
+          test -f _site/index.html
+          test -f _site/about/index.html
+          test -f _site/assets/css/styles.css
+          test -f _site/assets/js/alpine.min.js
+          pages=$(find _site/opinion -name index.html | wc -l)
+          echo "opinion pages: $pages"
+          test "$pages" -eq 10

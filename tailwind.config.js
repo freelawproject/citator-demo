@@ -1,14 +1,35 @@
 /**
- * Tailwind config — design tokens ported from the new CourtListener
- * front-end design (`courtlistener/cl/assets/tailwind/tailwind.config.js`)
- * so the demo site renders visually identical to production CL.
- *
- * If CL updates its tokens, sync them here.
+ * Tailwind config. The design tokens are CourtListener's
+ * (`cl/assets/tailwind/tailwind.config.js`), so the demo renders like the
+ * new CourtListener front end; sync them when CourtListener's change.
  */
 module.exports = {
   content: [
     "./src/**/*.{njk,md,html}",
     "./_includes/**/*.{njk,md,html}",
+    // classes the Alpine components toggle
+    "./assets/js/**/*.js",
+  ],
+  // Class names the templates assemble from data never appear in full
+  // in any file, so they are listed here.
+  safelist: [
+    "court-option--d0",
+    "court-option--d1",
+    "court-option--d2",
+    "court-option--d3",
+    "sev-rail--stop",
+    "sev-rail--warning",
+    "sev-rail--caution",
+    "sev-rail--neutral",
+    "sev-rail--positive",
+    "history-move--up",
+    "history-move--down",
+    "history-move--same",
+    "sev-toggle--stop",
+    "sev-toggle--warning",
+    "sev-toggle--caution",
+    "sev-toggle--neutral",
+    "sev-toggle--positive",
   ],
   theme: {
     extend: {

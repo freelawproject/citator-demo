@@ -1,21 +1,27 @@
 [project]
 name = "citator-demo"
 version = "0.0.1"
-description = "Static demo site for the Free Law Project citator. Build script transforms inference outputs into per-opinion JSON consumed by Eleventy."
+description = "Static demo site for the Free Law Project citator. The build script turns citator output into the per-opinion JSON Eleventy renders."
 authors = [{ name = "Free Law Project", email = "info@free.law" }]
 requires-python = ">=3.13"
 readme = "README.md"
 license = "BSD-2-Clause"
 
-dependencies = [
-    "pandas>=2.0",
-]
+dependencies = []
 
 urls.Repository = "https://github.com/freelawproject/citator-demo"
 urls."Organisation Homepage" = "https://free.law/"
 
+[dependency-groups]
+dev = [
+    "mypy>=1.15.0",
+    "pytest>=8.0",
+    "ruff>=0.11.8",
+]
+
 [tool.ruff]
 line-length = 79
+src = ["scripts", "scripts/tests"]
 lint.extend-safe-fixes = [
   "UP006",
 ]
@@ -37,3 +43,15 @@ lint.ignore = [
   "SIM108",
   "UP031",
 ]
+
+[tool.mypy]
+files = ["scripts"]
+mypy_path = "scripts"
+ignore_missing_imports = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["scripts/tests"]
+pythonpath = ["scripts"]

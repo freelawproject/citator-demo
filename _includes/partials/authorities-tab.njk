@@ -1,173 +1,111 @@
-{# Authorities tab content. Expects:
-   - `opinion.authorities` array (pre-sorted severity asc, date desc).
-   Lives inside an Alpine `x-data="authoritiesFilter"` scope. #}
-{% from "macros/treatment.njk" import severityBadge, validationDot, indicatorState %}
+{# Authorities tab: one row per case this opinion cites, numbered as in
+   the text. Reads `opinion.cited_authorities` and
+   `opinion.authorities_populated`. The sort dropdown and the filter
+   menu live in macros/list_header.njk; each row carries its rank under
+   every sort key, so the list reorders with CSS `order`. #}
+{% from "macros/list_header.njk" import listHeader, listToolbar %}
+{% from "macros/treatment.njk" import severityBadge, validationDot %}
+{% from "macros/evidence.njk" import evidenceCard %}
+{% from "macros/lists.njk" import citeList %}
+{% from "macros/icons.njk" import icon %}
 
-<div x-data="authoritiesFilter">
-  <div class="flex flex-wrap items-end gap-x-6 gap-y-4">
-    <fieldset class="pr-6 border-r border-greyscale-200">
-      <legend class="text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Severity</legend>
-      <div class="flex flex-wrap gap-2">
-        {% set sevTiers = [
-          {"label": "Stop", "prop": "filterStop", "active": "bg-red-500/10 text-red-700 border-red-500", "inactive": "bg-white text-red-700 border-red-200 hover:bg-red-50"},
-          {"label": "Warning", "prop": "filterWarning", "active": "bg-orange-500/10 text-orange-700 border-orange-500", "inactive": "bg-white text-orange-700 border-orange-200 hover:bg-orange-50"},
-          {"label": "Caution", "prop": "filterCaution", "active": "bg-amber-500/15 text-amber-700 border-amber-500", "inactive": "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"},
-          {"label": "Neutral", "prop": "filterNeutral", "active": "bg-greyscale-200 text-greyscale-700 border-greyscale-400", "inactive": "bg-white text-greyscale-700 border-greyscale-300 hover:bg-greyscale-100"}
-        ] %}
-        {% for s in sevTiers %}
-        <button
-          type="button"
-          x-on:click="toggleFilter('{{ s.prop }}')"
-          x-bind:aria-pressed="{{ s.prop }} ? 'true' : 'false'"
-          x-bind:class="{{ s.prop }} ? '{{ s.active }}' : '{{ s.inactive }}'"
-          class="px-3 py-1 text-xs font-medium rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
-        >
-          {{ s.label }}
-        </button>
-        {% endfor %}
-      </div>
-    </fieldset>
-
-    <fieldset class="pr-6 border-r border-greyscale-200">
-      <legend class="text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Validation</legend>
-      <div class="flex flex-wrap gap-2">
-        {% set valTiers = [
-          {"label": "Validated", "prop": "filterAgree", "active": "bg-blue-500/10 text-blue-700 border-blue-500", "inactive": "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"},
-          {"label": "Invalidated", "prop": "filterDisagree", "active": "bg-purple-500/10 text-purple-700 border-purple-500", "inactive": "bg-white text-purple-700 border-purple-200 hover:bg-purple-50"},
-          {"label": "Unvalidated", "prop": "filterUnverified", "active": "bg-greyscale-200 text-greyscale-700 border-greyscale-400", "inactive": "bg-white text-greyscale-700 border-greyscale-300 hover:bg-greyscale-100"}
-        ] %}
-        {% for v in valTiers %}
-        <button
-          type="button"
-          x-on:click="toggleFilter('{{ v.prop }}')"
-          x-bind:aria-pressed="{{ v.prop }} ? 'true' : 'false'"
-          x-bind:class="{{ v.prop }} ? '{{ v.active }}' : '{{ v.inactive }}'"
-          class="px-3 py-1 text-xs font-medium rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
-        >
-          {{ v.label }}
-        </button>
-        {% endfor %}
-      </div>
-    </fieldset>
-
-    <div>
-      <label for="authorities-sort" class="block text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Sort</label>
-      <select
-        id="authorities-sort"
-        x-on:change="setSort($event.target.value)"
-        class="px-3 py-1.5 text-sm border border-greyscale-300 rounded-lg bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
-      >
-        <option value="severity">Severity, then recency</option>
-        <option value="appearance">Order of appearance</option>
-      </select>
-    </div>
-
-    <p
-      role="status"
-      aria-live="polite"
-      class="ml-auto text-xs text-greyscale-500"
-    >
-      <span x-text="visibleCount">{{ opinion.authorities | length }}</span> of <span x-text="totalCount">{{ opinion.authorities | length }}</span> authorities
-    </p>
-  </div>
-
-  <ul role="list" class="mt-6 list-none pl-0 m-0 flex flex-col bg-white rounded-2xl border border-greyscale-200 overflow-hidden">
-    {% for auth in opinion.authorities %}
-    {% set vstate = indicatorState(auth.source, auth.treatment, auth.expert_treatment) | trim %}
+<section class="cited-authorities" aria-label="Cited authorities" x-data="authoritiesFilter">
+  {% if opinion.cited_authorities | length %}
+  {{ listToolbar([
+    {"key": "severity", "label": "Severity, most severe first"},
+    {"key": "appearance", "label": "Order of appearance, first to last"},
+    {"key": "name", "label": "Alphabetical, A to Z"},
+    {"key": "date", "label": "Date filed, newest first"},
+    {"key": "mentions", "label": "Times cited, most first"}
+  ], "authorities", "Applied treatment", "Recognized treatment", flags.validation) }}
+  {{ listHeader([
+    {"label": "Treatment", "title": "What this opinion does to the case, then what it recognizes other courts did"},
+    {"label": "Authority", "title": "The cited case, by name"},
+    {"label": "Date", "class": "col-head--pad", "title": "When the cited case was decided"},
+    {"label": "Cited", "class": "col-head--pad", "title": "How often this opinion cites the case"}
+  ], flags.validation) }}
+  <ol role="list" class="citator-list">
+    {% for a in opinion.cited_authorities %}
     <li
-      data-row-id="{{ auth.row_id }}"
-      data-severity="{{ auth.severity | lower }}"
-      data-validation="{{ vstate }}"
-      data-appearance-index="{{ loop.index0 }}"
-      x-show="rowVisible($el)"
-      x-bind:style="rowOrder($el)"
-      class="border-b border-greyscale-200 last:border-b-0"
+      id="authority-{{ a.n }}"
+      data-row-id="{{ a.row_id }}"
+      data-search="{{ a.search_text }}"
+      data-severity="{{ a.overall_severity | lower }}"
+      data-applied-severity="{{ a.severity | lower }}"
+      data-rec-severity="{{ a.recognized_filter | lower }}"
+      data-validation="{{ a.validation }}"
+      data-appearance-index="{{ a.appearance_index }}"
+      data-severity-index="{{ a.severity_index }}"
+      data-date-index="{{ a.date_index }}"
+      data-name-index="{{ a.name_index }}"
+      data-mentions-index="{{ a.mentions_index }}"
+      x-bind:class="rowClass"
+      x-bind:style="rowStyle"
+      class="cited-authority sev-rail sev-rail--{{ a.overall_severity | lower }}"
     >
-      <details class="authority-row">
-        <summary class="cursor-pointer list-none px-5 py-3.5 hover:bg-greyscale-50 focus-visible:bg-greyscale-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-300">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {{ severityBadge(auth.severity, auth.treatment_active) }}
-            <span class="flex-1 min-w-0 text-sm inline-flex items-center gap-x-2">
-              {% if auth.is_scoped %}
-                <a href="/opinion/{{ auth.cited_cluster_id }}/" class="font-semibold text-greyscale-900 hover:text-primary-700 hover:underline" x-on:click.stop>{{ auth.cited_case_name }}</a>
-              {% else %}
-                <span class="font-semibold text-greyscale-900">{{ auth.cited_case_name }}</span>
-              {% endif %}
-              {{ validationDot(vstate, auth.expert_treatment) }}
-            </span>
-            <svg class="w-4 h-4 expand-chevron text-greyscale-400 transition-transform flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-            </svg>
+      {% if a.has_detail %}<details class="authority-row"><summary class="authority-row__summary">{% endif %}
+      <div class="citator-row{% if flags.validation %} citator-row--validation{% endif %}">
+        {# what this opinion does, then what it recognizes other courts did #}
+        <div class="citator-row__treatment">
+          <span>
+            {{ severityBadge(a.severity, a.treatment_active) }}
+            {% if flags.validation %}{{ validationDot(a.applied_validation, a.expert_treatment) }}{% endif %}
+          </span>
+          {% for r in a.recognized %}
+          <span title="This opinion notes that the case was {{ r.treatment_past | lower }} by another court">
+            {{ severityBadge(r.severity, "Recognizes to be " ~ (r.treatment_past | lower)) }}
+            {% if flags.validation %}{{ validationDot(r.validation, a.expert_treatment) }}{% endif %}
+          </span>
+          {% endfor %}
+        </div>
+        <div class="cited-authority__body">
+          <div class="citator-row__name">
+            {# the name goes to the authority's own page, when the site has one #}
+            {% if a.page_url %}<a href="{{ a.page_url }}" x-on:click.stop class="citator-row__link" title="Open this opinion">{{ a.name }}</a>
+            {% else %}<span class="citator-row__link">{{ a.name }}</span>{% endif %}
+
           </div>
-          <dl class="mt-2 grid gap-y-1 text-xs">
-            {# Line 1: Court + File Date + Docket Number (wraps) #}
-            <div class="flex flex-wrap gap-x-10 gap-y-0.5">
-              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Court</dt>
-                <dd class="text-greyscale-700">{{ auth.cited_court_display }}</dd>
-              </div>
-              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">File Date</dt>
-                <dd class="text-greyscale-700">{{ auth.cited_date_filed }}</dd>
-              </div>
-              {% if auth.cited_docket_number %}
-              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Docket Number</dt>
-                <dd class="text-greyscale-700">{{ auth.cited_docket_number }}</dd>
-              </div>
-              {% endif %}
-            </div>
-            {# Line 2: Citations — first 3 always shown; remaining hidden
-               behind a "+N" expand button. Each row scopes its own state. #}
-            {% if auth.cited_citations %}
-            {% set citationCount = auth.cited_citations | length %}
-            <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5" x-data="{ showAll: false }">
-              <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Citations</dt>
-              <dd class="text-greyscale-700">
-                {% for c in auth.cited_citations %}
-                  {%- if loop.index == 1 -%}
-                    {{ c }}
-                  {%- elif loop.index <= 3 -%}
-                    <span class="text-greyscale-400" aria-hidden="true"> · </span>{{ c }}
-                  {%- else -%}
-                    <span x-show="showAll" x-cloak><span class="text-greyscale-400" aria-hidden="true"> · </span>{{ c }}</span>
-                  {%- endif -%}
-                {% endfor %}
-                {% if citationCount > 3 %}
-                <button
-                  type="button"
-                  x-show="!showAll"
-                  x-on:click.stop.prevent="showAll = true"
-                  aria-label="Show {{ citationCount - 3 }} more citation{% if citationCount - 3 != 1 %}s{% endif %}"
-                  class="ml-1 inline-flex items-center justify-center rounded-full bg-greyscale-100 hover:bg-greyscale-200 px-1.5 py-0.5 text-[10px] font-semibold text-greyscale-600 transition"
-                >
-                  +{{ citationCount - 3 }}
-                </button>
-                {% endif %}
-              </dd>
-            </div>
+          <p class="citator-row__meta">
+            {%- if a.court_name %}{{ a.court_name }}{% endif -%}
+            {%- if a.court_name and a.status %} <span class="cite-list__dot" aria-hidden="true">·</span> {% endif -%}
+            {%- if a.status %}{{ a.status }}{% endif -%}
+          </p>
+          {% if a.docket_numbers | length or a.citations | length or a.cited_as | length %}
+          <dl class="cited-authority__meta">
+            {% if a.docket_numbers | length %}
+            <dt>Docket Number</dt>
+            <dd>{{ citeList(a.docket_numbers, noun="docket number") }}</dd>
+            {% endif %}
+            {% if a.citations | length %}
+            <dt>Citations</dt>
+            <dd>{{ citeList(a.citations) }}</dd>
+            {% endif %}
+            {% if a.cited_as | length %}
+            <dt>Cited as</dt>
+            <dd>{{ citeList(a.cited_as, dot=true, noun="citation form") }}</dd>
             {% endif %}
           </dl>
-        </summary>
-
-        <div class="px-5 py-4 bg-greyscale-50 border-t border-greyscale-200 space-y-3 text-sm">
-          {% if auth.expand and auth.expand.context %}
-          {% set ctx = auth.expand.context %}
-          <p class="pl-3 border-l-2 border-greyscale-300 text-greyscale-700 leading-relaxed">
-            {%- if ctx.before %}{{ ctx.before }} {% endif -%}
-            <button
-              type="button"
-              data-quote="{{ ctx.quote }}"
-              x-on:click="$dispatch('quote-click', { quote: $el.dataset.quote })"
-              class="inline text-left bg-yellow-100 text-greyscale-900 font-semibold rounded px-1 cursor-pointer hover:bg-yellow-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 transition-colors"
-              aria-label="Show this quote in the opinion body"
-            >{{ ctx.quote }}</button>
-            {%- if ctx.after %} {{ ctx.after }}{% endif -%}
-          </p>
           {% endif %}
         </div>
-      </details>
+        <div class="citator-row__date">{{ a.date_filed }}</div>
+        <div class="citator-row__cited" title="{{ a.n_mentions }} mention{% if a.n_mentions != 1 %}s{% endif %} in this opinion">{{ a.n_mentions }}</div>
+        {% if a.has_detail %}
+        {{ icon("chevron-right", "citator-row__chevron expand-chevron") }}
+        {% else %}
+        <span aria-hidden="true"></span>
+        {% endif %}
+      </div>
+      {% if a.has_detail %}</summary>
+        <div class="authority-detail">
+          {% for c in a.evidence_cards %}{{ evidenceCard(c) }}{% endfor %}
+        </div>
+      </details>{% endif %}
     </li>
     {% endfor %}
-  </ul>
-</div>
+  </ol>
+  {% elif opinion.authorities_populated %}
+  <p class="tab-empty">This opinion cites no other opinions.</p>
+  {% else %}
+  <p class="tab-empty">The authorities cited in this opinion have not been identified yet.</p>
+  {% endif %}
+</section>

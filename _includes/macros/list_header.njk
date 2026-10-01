@@ -1,0 +1,86 @@
+{# Toolbar and column headers for the Authorities and Cited By lists.
+   `listToolbar(sort_options, noun, rec_label, validation)` renders the
+   sort dropdown (treatment_list.js reorders the rows with CSS `order`
+   from the ranks each row carries; each option is {key, label}), the
+   filter menu (two sections: the treatment this opinion applied and the
+   treatments it recognizes other courts applied, each by severity;
+   `applied_label` and `rec_label` head the two sections) and the "N of
+   M" count.
+   `listHeader(cols, validation)` renders the column labels. Rows and
+   header share the `.citator-row` grid. Lives inside a treatment_list.js
+   scope. #}
+{% from "macros/icons.njk" import icon %}
+{% from "macros/treatment.njk" import severityBadge %}
+
+{% macro filterMenu(applied_label, rec_label, validation=false) %}
+<details class="list-filter">
+  <summary class="list-filter__summary" x-bind:class="filterSummaryClass" title="Show only entries whose treatments have these severities">
+    {{ icon("filter", "w-3.5 h-3.5") }}
+    Severity filter
+  </summary>
+  <div class="list-filter__menu list-filter__menu--wide">
+    <div class="list-filter__columns">
+      <div>
+        <p class="list-filter__heading">{{ applied_label }}</p>
+        {% for tier in ["Stop", "Warning", "Caution", "Neutral", "Positive"] %}
+        <label class="list-filter__option">
+          <input type="checkbox" class="checkbox" data-filter="filter{{ tier }}" x-bind:checked="filterChecked" x-on:change="toggleFilter">
+          {{ severityBadge(tier, tier, true) }}
+        </label>
+        {% endfor %}
+      </div>
+      <div>
+        <p class="list-filter__heading">{{ rec_label }}</p>
+        {% for tier in ["Stop", "Warning", "Caution", "Neutral", "Positive"] %}
+        <label class="list-filter__option">
+          <input type="checkbox" class="checkbox" data-filter="filterRec{{ tier }}" x-bind:checked="filterChecked" x-on:change="toggleFilter">
+          {{ severityBadge(tier, tier, true) }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% if validation %}
+    <p class="list-filter__heading list-filter__heading--next">Validation</p>
+    {% for v in [{"label": "Validated", "prop": "filterAgree"}, {"label": "Invalidated", "prop": "filterDisagree"}, {"label": "Unvalidated", "prop": "filterUnverified"}] %}
+    <label class="list-filter__option">
+      <input type="checkbox" class="checkbox" data-filter="{{ v.prop }}" x-bind:checked="filterChecked" x-on:change="toggleFilter">
+      {{ v.label }}
+    </label>
+    {% endfor %}
+    {% endif %}
+    <button type="button" class="list-filter__clear" x-on:click="clearFilters" x-show="hasFilters" x-cloak>Clear all</button>
+  </div>
+</details>
+{% endmacro %}
+
+{% macro listToolbar(sort_options, noun, applied_label, rec_label, validation=false) %}
+<div class="list-toolbar">
+  <div class="list-toolbar__controls">
+    <label class="list-search">
+      <span class="sr-only">Search {{ noun }} by name or citation</span>
+      {{ icon("search", "list-search__icon") }}
+      <input type="search" class="list-search__input" placeholder="Name or citation…" x-on:input.debounce.150ms="setQuery">
+    </label>
+    <label class="sort-select">
+      <span class="sort-select__label">Sort by</span>
+      <select class="sort-select__input" x-on:change="setSort">
+        {% for o in sort_options %}
+        <option value="{{ o.key }}"{% if loop.first %} selected{% endif %}>{{ o.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {{ filterMenu(applied_label, rec_label, validation) }}
+  </div>
+  <p class="list-count" role="status" aria-live="polite"><span x-text="visibleCount"></span> of <span x-text="totalCount"></span> {{ noun }}</p>
+</div>
+{% endmacro %}
+
+{% macro listHeader(cols, validation=false) %}
+<div class="citator-row citator-row--head{% if validation %} citator-row--validation{% endif %}">
+  {% for c in cols %}
+  <span class="col-head {{ c.class }}">
+    <span title="{{ c.title }}">{{ c.label }}</span>
+  </span>
+  {% endfor %}
+</div>
+{% endmacro %}

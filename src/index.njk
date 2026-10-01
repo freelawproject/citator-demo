@@ -4,269 +4,202 @@ title: Search
 scripts:
   - /assets/js/alpine/components/search_filter.js
 ---
-{% from "macros/treatment.njk" import severityBadge, treatmentLine, emptyTreatmentBadge %}
+{# Home page: every opinion as a card, filtered by the rail and the
+   search box (components/search_filter.js), ten to a page. #}
+{% from "macros/status.njk" import statusRows %}
+{% from "macros/lists.njk" import citeList %}
+{% from "macros/icons.njk" import icon %}
 
-{# Filter the canonical courts list to just the courts present in the
-   current scoped index. Preserves the level-then-alphabetical sort from
-   _data/courts.json. #}
-{% set scopedCourtKeys = [] %}
-{% for case in index %}
-  {% if case.court not in scopedCourtKeys %}{% set _ = scopedCourtKeys.push(case.court) %}{% endif %}
-{% endfor %}
-{% set scopedCourts = [] %}
-{% for c in courts %}
-  {% if c.key in scopedCourtKeys %}{% set _ = scopedCourts.push(c) %}{% endif %}
-{% endfor %}
-
-<div x-data="searchFilter()">
+<div x-data="searchFilter">
   <h1 class="sr-only">Demo opinions</h1>
 
   <div class="grid gap-6 md:gap-10 md:grid-cols-[220px_minmax(0,1fr)]">
     <aside aria-label="Filters" class="md:sticky md:top-6 md:self-start">
-      <h2 class="text-xs uppercase tracking-wide text-greyscale-500 font-semibold">Filters</h2>
+      <h2 class="eyebrow">Filters</h2>
 
-      <div class="mt-3 border-t border-greyscale-200 pt-5">
-        <span class="block text-xs font-bold uppercase tracking-wider text-greyscale-800">Court</span>
-        <div class="mt-2 flex flex-col gap-3">
-          {% for jurisdiction in court_jurisdictions %}
-            {# Walk every category in this jurisdiction, then every
-               scoped court within each category. Build the per-level
-               key lists so the parent checkboxes can bulk-toggle. #}
-            {% set jurisdictionBuckets = [] %}
-            {% set jurisdictionKeys = [] %}
-            {% for category in court_categories %}
-              {% if category.jurisdiction == jurisdiction.key %}
-                {% set bucket = [] %}
-                {% for c in scopedCourts %}
-                  {% if c.category == category.key %}{% set _ = bucket.push(c) %}{% endif %}
-                {% endfor %}
-                {% if bucket | length > 0 %}
-                  {% set _ = jurisdictionBuckets.push({"category": category, "courts": bucket}) %}
-                  {% for c in bucket %}{% set _ = jurisdictionKeys.push(c.key) %}{% endfor %}
-                {% endif %}
-              {% endif %}
-            {% endfor %}
+      <div class="filter-group">
+        <label class="inline-flex items-center gap-2 text-sm font-semibold text-greyscale-800">
+          <input type="checkbox" class="checkbox" checked data-filter="filterAnchorsOnly" x-bind:checked="filterChecked" x-on:change="setAnchorsOnly">
+          Anchor opinions only
+        </label>
+        <p class="mt-1 text-xs text-greyscale-500">The ten opinions the preview is built around; every other opinion here is one they cite or that cites them.</p>
+      </div>
 
-            {% if jurisdictionBuckets | length > 0 %}
-              {% set jurKeysCsv = jurisdictionKeys | join(',') %}
-              <div>
-                {# Tier 1 — jurisdiction parent (Federal / State) #}
-                <label class="inline-flex items-center gap-2 text-sm font-semibold text-greyscale-800">
-                  <input
-                    type="checkbox"
-                    data-court-keys="{{ jurKeysCsv }}"
-                    x-effect="$el.indeterminate = isCategoryPartial($el.dataset.courtKeys.split(','))"
-                    x-bind:checked="isCategoryAll($el.dataset.courtKeys.split(','))"
-                    x-on:change="toggleCategory($el.dataset.courtKeys.split(','), $event.target.checked)"
-                    class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
-                  {{ jurisdiction.display }}
-                </label>
-                <div class="mt-1.5 ml-6 flex flex-col gap-2">
-                  {% for entry in jurisdictionBuckets %}
-                    {% set bucket = entry.courts %}
-                    {% set categoryKeys = [] %}
-                    {% for c in bucket %}{% set _ = categoryKeys.push(c.key) %}{% endfor %}
-                    {% set catKeysCsv = categoryKeys | join(',') %}
-                    {# Drop the redundant child row when a category has
-                       exactly one court whose display name matches the
-                       category name (e.g. SCOTUS). Otherwise show
-                       category parent + each court below. #}
-                    {% set hideChildren = bucket | length == 1 and bucket[0].display == entry.category.display %}
-                    <div>
-                      {# Tier 2 — category parent (e.g. U.S. Circuit courts).
-                         When the category has children to show, the row gets
-                         a chevron toggle that expands/collapses tier 3. #}
-                      <div class="flex items-center justify-between gap-2">
-                        <label class="inline-flex items-center gap-2 text-sm font-medium text-greyscale-700 flex-1">
-                          <input
-                            type="checkbox"
-                            data-court-keys="{{ catKeysCsv }}"
-                            x-effect="$el.indeterminate = isCategoryPartial($el.dataset.courtKeys.split(','))"
-                            x-bind:checked="isCategoryAll($el.dataset.courtKeys.split(','))"
-                            x-on:change="toggleCategory($el.dataset.courtKeys.split(','), $event.target.checked)"
-                            class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
-                          {{ entry.category.display }}
-                        </label>
-                        {% if not hideChildren %}
-                        <button
-                          type="button"
-                          x-on:click="toggleExpanded('{{ entry.category.key }}')"
-                          x-bind:aria-expanded="isExpanded('{{ entry.category.key }}') ? 'true' : 'false'"
-                          aria-label="Toggle {{ entry.category.display }}"
-                          class="p-1 -m-1 text-greyscale-500 hover:text-greyscale-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 rounded"
-                        >
-                          <svg
-                            x-bind:class="isExpanded('{{ entry.category.key }}') ? 'rotate-180' : ''"
-                            class="w-4 h-4 transition-transform"
-                            viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-                          </svg>
-                        </button>
-                        {% endif %}
-                      </div>
-                      {% if not hideChildren %}
-                      <div x-show="isExpanded('{{ entry.category.key }}')" x-cloak class="mt-1 ml-6 flex flex-col gap-1.5">
-                        {% for c in bucket %}
-                        {# Tier 3 — individual court #}
-                        <label class="inline-flex items-center gap-2 text-sm text-greyscale-600">
-                          <input
-                            type="checkbox"
-                            x-bind:checked="selectedCourts.includes('{{ c.key }}')"
-                            x-on:change="toggleCourt('{{ c.key }}', $event.target.checked)"
-                            class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
-                          {{ c.display }}
-                        </label>
-                        {% endfor %}
-                      </div>
-                      {% endif %}
-                    </div>
-                  {% endfor %}
-                </div>
-              </div>
-            {% endif %}
-          {% endfor %}
+      <div class="filter-group">
+        <span class="filter-group__title">Court</span>
+        <button type="button" class="court-open" x-on:click="openPicker">
+          <span x-text="courtSummary">All courts</span>
+          {{ icon("chevron-down-small", "w-4 h-4 text-greyscale-400") }}
+        </button>
+        <div class="court-chips" x-show="hasSelectedCourts" x-cloak>
+          {% for tab in court_picker %}{% for group in tab.groups %}{% for c in group.courts %}
+          <button type="button" class="court-chip" data-court-key="{{ c.key }}" x-show="courtSelected" x-cloak
+                  x-on:click="removeCourt" title="Remove {{ c.display }}">
+            {{ c.display }}<span class="court-chip__x" aria-hidden="true">×</span>
+            <span class="sr-only">Remove {{ c.display }} filter</span>
+          </button>
+          {% endfor %}{% endfor %}{% endfor %}
+          <button type="button" class="court-chips__clear" x-on:click="clearAllCourts">Clear</button>
         </div>
       </div>
 
-      {% set dhTiers = [
-        {"label": "Stop", "prop": "filterDhStop"},
-        {"label": "Warning", "prop": "filterDhWarning"},
-        {"label": "Caution", "prop": "filterDhCaution"},
-        {"label": "Neutral", "prop": "filterDhNeutral"}
-      ] %}
-      {% set crTiers = [
-        {"label": "Stop", "prop": "filterCrStop"},
-        {"label": "Warning", "prop": "filterCrWarning"},
-        {"label": "Caution", "prop": "filterCrCaution"},
-        {"label": "Neutral", "prop": "filterCrNeutral"}
-      ] %}
-
-      <div class="mt-6 border-t border-greyscale-200 pt-5">
-        <span class="block text-xs font-bold uppercase tracking-wider text-greyscale-800">Severity</span>
-        <div class="mt-3 grid grid-cols-2 gap-x-4">
-          <span class="text-xs font-medium text-greyscale-600">Direct history</span>
-          <span class="text-xs font-medium text-greyscale-600">Citing reference</span>
-        </div>
-        <div class="mt-3 grid grid-cols-2 gap-x-4">
-          <fieldset class="flex flex-col gap-2">
-            <legend class="sr-only">Direct history severity</legend>
-            {% for t in dhTiers %}
-            <label class="inline-flex items-center gap-2 text-sm text-greyscale-700">
-              <input
-                type="checkbox"
-                x-bind:checked="{{ t.prop }}"
-                x-on:change="setSevFilter('{{ t.prop }}', $event.target.checked)"
-                class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
-              {{ t.label }}
-            </label>
+      <div class="filter-group">
+        <span class="filter-group__title">Severity</span>
+        {# one row of toggles per question (what the opinion decided, what
+           happened on appeal, how later courts treat it), most severe on
+           the left; each toggle names its tier on hover and to assistive
+           technology #}
+        {% for direction in [
+          {"label": "Disposition", "prefix": "filterDisp"},
+          {"label": "On appeal", "prefix": "filterDh"},
+          {"label": "Later courts", "prefix": "filterCr"}
+        ] %}
+        <div class="sev-group" role="group" aria-label="{{ direction.label }} severity">
+          <p class="sev-group__title">{{ direction.label }}</p>
+          <div class="sev-grid">
+            {% for tier in ["Stop", "Warning", "Caution", "Neutral", "Positive"] %}
+            <button type="button" role="checkbox" class="sev-toggle sev-toggle--{{ tier | lower }}" data-filter="{{ direction.prefix }}{{ tier }}"
+                    x-bind:aria-checked="filterOn" x-bind:class="filterClass" x-on:click="toggleFilter"
+                    aria-label="{{ direction.label }}: {{ tier }}" title="{{ direction.label }}: {{ tier }}">
+              {{ icon("severity-" ~ ("affirmed" if tier == "Positive" else tier | lower), "sev-toggle__icon") }}
+            </button>
             {% endfor %}
-          </fieldset>
-          <fieldset class="flex flex-col gap-2">
-            <legend class="sr-only">Citing reference severity</legend>
-            {% for t in crTiers %}
-            <label class="inline-flex items-center gap-2 text-sm text-greyscale-700">
-              <input
-                type="checkbox"
-                x-bind:checked="{{ t.prop }}"
-                x-on:change="setSevFilter('{{ t.prop }}', $event.target.checked)"
-                class="rounded border-greyscale-300 text-primary-600 focus-visible:ring-4 focus-visible:ring-primary-300">
-              {{ t.label }}
-            </label>
-            {% endfor %}
-          </fieldset>
+          </div>
         </div>
+        {% endfor %}
+        <button type="button" class="severity-clear" x-on:click="clearSeverityFilters" x-show="hasSeverityFilters" x-cloak>Clear severity filters</button>
       </div>
 
-      <p
-        role="status"
-        aria-live="polite"
-        class="mt-5 pt-4 border-t border-greyscale-200 text-xs text-greyscale-500"
-      >
+      <p role="status" aria-live="polite" class="filter-group text-xs text-greyscale-500">
         <span x-text="visibleCount">{{ index | length }}</span> of <span x-text="totalCount">{{ index | length }}</span> opinions
       </p>
     </aside>
 
     <div>
       <label class="block mb-6">
-        <span class="sr-only">Search by case name</span>
+        <span class="sr-only">Search by case name or citation</span>
         <span class="relative block">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-greyscale-400 pointer-events-none" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <circle cx="9" cy="9" r="6" />
-            <path stroke-linecap="round" d="m14 14 4 4" />
-          </svg>
-          <input
-            type="search"
-            placeholder="Search by case name…"
-            x-bind:value="query"
-            x-on:input.debounce.150ms="setQuery($event.target.value)"
-            class="block w-full rounded-lg border border-greyscale-300 bg-white pl-10 pr-3 py-2.5 text-sm text-greyscale-900 placeholder:text-greyscale-400 focus:outline-none focus:border-primary-500 focus-visible:ring-4 focus-visible:ring-primary-300"
-          >
+          {{ icon("search", "search-box__icon") }}
+          <input type="search" class="search-box" placeholder="Search by case name or citation…"
+                 x-bind:value="query" x-on:input.debounce.150ms="setQuery">
         </span>
       </label>
-      <ul role="list" class="list-none pl-0 flex flex-col gap-4 m-0">
+      <ul role="list" class="home-list">
       {% for case in index %}
-      {% set dh = case.summary.direct_history %}
-      {% set cr = case.summary.most_severe_treatment %}
       <li
         data-court="{{ case.court }}"
-        data-case-name="{{ case.case_name | lower }}"
+        data-tier="{{ case.tier }}"
+        data-search="{{ case.search_text }}"
+        data-disp-severity="{{ case.disposition.severity | lower if case.disposition else 'none' }}"
         data-dh-severity="{{ case.summary.dh_severity | lower if case.summary.dh_severity else 'none' }}"
         data-cr-severity="{{ case.summary.cr_severity | lower if case.summary.cr_severity else 'none' }}"
-        x-show="rowVisible($el)"
-        class="bg-white rounded-2xl border border-greyscale-200 p-6 md:p-7 transition-shadow hover:shadow-sm"
+        x-show="rowVisible"
+        class="home-row"
       >
-        <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-          <div class="flex-1 min-w-0">
+        {# the name's link covers the whole card; the links in the status
+           rows sit above it #}
+        <div class="home-card">
+          <div class="min-w-0">
             <h3 class="text-xl font-semibold leading-tight">
-              <a href="/opinion/{{ case.cluster_id }}/" class="text-greyscale-900 hover:text-primary-700 hover:underline">{{ case.case_name }}</a>
+              <a href="/opinion/{{ case.cluster_id }}/" class="home-card__link">{{ case.case_name }}</a>
+              {% if case.tier == "anchor" %}<span class="home-card__anchor" title="One of the ten opinions the preview is built around">Anchor</span>{% endif %}
             </h3>
-            <dl class="mt-2 flex flex-wrap gap-x-10 gap-y-1 text-xs uppercase tracking-wide text-greyscale-500">
-              <div class="inline-flex gap-1.5">
-                <dt class="font-semibold">Court</dt>
-                <dd class="font-normal normal-case tracking-normal text-greyscale-700">{{ case.court_display }}</dd>
-              </div>
-              <div class="inline-flex gap-1.5">
-                <dt class="font-semibold">File Date</dt>
-                <dd class="font-normal normal-case tracking-normal text-greyscale-700">{{ case.date_filed }}</dd>
-              </div>
-            </dl>
-            {% if case.docket_number %}
-            <dl class="mt-1 flex flex-wrap gap-x-10 text-xs uppercase tracking-wide text-greyscale-500">
-              <div class="inline-flex gap-1.5">
-                <dt class="font-semibold">Docket Number</dt>
-                <dd class="font-normal normal-case tracking-normal text-greyscale-700">{{ case.docket_number }}</dd>
-              </div>
-            </dl>
-            {% endif %}
-          </div>
-          <div class="shrink-0 max-w-xs grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-2 items-center">
-            <span class="text-xs font-semibold uppercase tracking-wide text-greyscale-500">Direct history</span>
-            <div>
-              {% if dh %}
-                {{ treatmentLine(dh) }}
-              {% elif case.is_court_of_last_resort %}
-                {{ emptyTreatmentBadge("Not applicable", "verified", case.court_display ~ " is a court of last resort. Decisions from this court are not subject to direct appellate review.") }}
-              {% else %}
-                {{ emptyTreatmentBadge("None identified", "unverified", "No higher-court appellate history has been identified for this opinion.") }}
+            <dl class="meta-list home-meta">
+              <div><dt>Court</dt><dd>{{ case.court_display }}</dd></div>
+              <div><dt>File Date</dt><dd>{{ case.date_filed }}</dd></div>
+              {% if case.docket_numbers | length %}<div><dt>Docket Number</dt><dd>{{ citeList(case.docket_numbers, noun="docket number") }}</dd></div>{% endif %}
+              {% if case.citations | length %}
+              <div><dt>Citations</dt><dd>{{ citeList(case.citations, dot=true) }}</dd></div>
               {% endif %}
-            </div>
-            <span class="text-xs font-semibold uppercase tracking-wide text-greyscale-500">Citing reference</span>
-            <div>
-              {% if cr %}
-                {{ treatmentLine(cr) }}
-              {% else %}
-                {{ emptyTreatmentBadge("None identified", "unverified", "No citing references have been identified for this opinion.") }}
-              {% endif %}
-            </div>
+            </dl>
           </div>
+          {{ statusRows(case.status, case.disposition, "", true) }}
+          {% if case.excerpt %}
+          <p class="home-snippet">{{ case.excerpt }}</p>
+          {% endif %}
         </div>
-
-        {% if case.excerpt %}
-        <p class="mt-4 text-sm text-greyscale-600 leading-relaxed border-l-2 border-greyscale-200 pl-3">{{ case.excerpt }}</p>
-        {% endif %}
       </li>
       {% endfor %}
       </ul>
+      <nav class="home-pager" aria-label="Pages" x-show="hasPages">
+        <button type="button" x-on:click="prevPage" x-bind:disabled="atFirstPage" class="home-pager__btn">Previous</button>
+        <span class="home-pager__label" x-text="pageLabel"></span>
+        <button type="button" x-on:click="nextPage" x-bind:disabled="atLastPage" class="home-pager__btn">Next</button>
+      </nav>
+    </div>
+  </div>
+
+  {# Court picker: a tab per jurisdiction and level; inside a tab the
+     courts are grouped by state, that state's highest court first. #}
+  <div class="court-modal" x-show="pickerOpen" x-cloak x-on:keydown.escape.window="closePicker">
+    <div class="court-modal__backdrop" x-on:click="closePicker"></div>
+    <div class="court-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="court-picker-title">
+      <div class="court-modal__head">
+        <h2 id="court-picker-title" class="text-lg font-semibold text-greyscale-900">Select courts</h2>
+        <button type="button" class="court-modal__close" x-on:click="closePicker" aria-label="Close">
+          {{ icon("close", "w-5 h-5") }}
+        </button>
+      </div>
+
+      <div class="court-modal__tools">
+        <label class="flex-1 min-w-0">
+          <span class="sr-only">Filter courts by name</span>
+          <input type="search" class="search-box search-box--plain" placeholder="Filter courts by name…" autocomplete="off"
+                 x-bind:value="pickerQuery" x-on:input="setPickerQuery">
+        </label>
+        <div class="court-modal__btns">
+          <button type="button" class="court-btn" x-on:click="checkAllCourts">Check all</button>
+          <button type="button" class="court-btn" x-on:click="clearAllCourts">Clear all</button>
+          <button type="button" class="court-btn" x-on:click="checkTabCourts">Check tab</button>
+          <button type="button" class="court-btn" x-on:click="clearTabCourts">Clear tab</button>
+        </div>
+      </div>
+
+      <div class="court-modal__tabs" role="tablist" aria-label="Court groups">
+        {% for tab in court_picker %}
+        <button type="button" role="tab" id="court-tab-{{ tab.key }}" aria-controls="court-panel-{{ tab.key }}"
+                data-tab-key="{{ tab.key }}"
+                x-bind:aria-selected="pickerTabSelected" x-bind:class="pickerTabClass" x-on:click="selectPickerTab"
+                class="court-tab">
+          {{ tab.display }}<span class="court-tab__count">{{ tab.n_courts }}</span>
+        </button>
+        {% endfor %}
+      </div>
+
+      <div class="court-modal__body">
+        {% for tab in court_picker %}
+        <div id="court-panel-{{ tab.key }}" role="tabpanel" aria-labelledby="court-tab-{{ tab.key }}"
+             data-tab-key="{{ tab.key }}" x-show="pickerPanelVisible" class="court-cols">
+          {% for group in tab.groups %}
+          <section class="court-group"
+                   data-court-names="{% for c in group.courts %}{{ c.display | lower }} {% endfor %}{{ group.name | lower }}"
+                   x-show="groupVisible">
+            <label class="court-group__head">
+              <input type="checkbox" class="checkbox" data-court-keys="{{ group.keys | join(',') }}"
+                     x-effect="syncGroupBox" x-bind:checked="groupAllSelected" x-on:change="toggleGroup">
+              {{ group.name }}
+            </label>
+            <ul class="court-group__list">
+              {% for c in group.courts %}
+              <li data-court-key="{{ c.key }}" data-court-name="{{ c.display | lower }}" x-show="courtVisible">
+                <label class="court-option court-option--d{{ c.depth }}">
+                  <input type="checkbox" class="checkbox" x-bind:checked="courtSelected" x-on:change="toggleCourt">
+                  {{ c.display }}
+                </label>
+              </li>
+              {% endfor %}
+            </ul>
+          </section>
+          {% endfor %}
+          <p class="court-empty" x-show="pickerTabEmpty" x-cloak>No court matches that name.</p>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="court-modal__foot">
+        <span class="text-sm text-greyscale-600"><span x-text="courtSummary">All courts</span> <span class="cite-list__dot" aria-hidden="true">·</span> <span x-text="visibleCount"></span> opinions</span>
+        <button type="button" class="court-done" x-on:click="closePicker">Done</button>
+      </div>
     </div>
   </div>
 </div>

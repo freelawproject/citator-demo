@@ -4,18 +4,20 @@
   "private": true,
   "description": "Static demo site for the Free Law Project citator.",
   "scripts": {
-    "build:data": "python scripts/build_data.py",
+    "build:data": "uv run python scripts/build_data.py",
     "build:css": "tailwindcss -i assets/css/styles.css -o _site/assets/css/styles.css --minify",
     "build:eleventy": "eleventy",
     "build": "npm run build:data && npm run build:css && npm run build:eleventy",
     "dev:css": "tailwindcss -i assets/css/styles.css -o _site/assets/css/styles.css --watch",
     "dev:eleventy": "eleventy --serve",
     "dev": "npm run build:data && (npm run dev:css & npm run dev:eleventy)",
-    "clean": "rm -rf _site _data/opinions"
+    "test": "uv run pytest",
+    "lint": "uv run ruff check scripts && uv run ruff format --check scripts && uv run mypy",
+    "clean": "rm -rf _site _data/opinions _data/*.json"
   },
   "devDependencies": {
     "@11ty/eleventy": "^3.0.0",
-    "alpinejs": "^3.14.0",
+    "@alpinejs/csp": "3.15.9",
     "tailwindcss": "^3.4.0"
   },
   "license": "BSD-2-Clause",

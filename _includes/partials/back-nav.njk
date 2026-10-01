@@ -1,0 +1,10 @@
+{# "Back" control (components/back_nav.js). The layout renders it above
+   the content on every page but the home page; a page that sets
+   `backNav: inline` in its front matter renders it itself. #}
+{% from "macros/icons.njk" import icon %}
+<div class="back-nav-row">
+  <a href="/" x-data="backNav" x-on:click.prevent="goBack" class="back-nav" title="Back to the previous page">
+    {{ icon("chevron-left", "w-4 h-4") }}
+    Back
+  </a>
+</div>

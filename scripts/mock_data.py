@@ -1,37 +1,13 @@
-"""Hand-written mock fixtures for the demo site, used until real inference
-data lands (issue #13).
+"""Hand-written fixtures: ten opinions around the qualified-immunity line
+of cases, with treatment edges between them and a few external citing
+cases. Used for CI builds and local work without `data-source/`.
 
-The 10 scoped opinions form a coherent qualified-immunity / §1983 cluster
-(SCOTUS Pearson/Saucier/Harlow + lower-court applications). Real cluster IDs
-and real opinion paragraphs (extracted from CourtListener) are used for 9 of
-the 10; the 10th is a fabricated D. Utah district-court opinion to demonstrate
-Path-B (heavily-cited) scope.
-
-Data shape mirrors the production citator schema documented in
-ai-research/citator_launch_plan/db_design.md. Each treatment relationship is
-authored once on the citing side; build_data.py derives the cited side's
-view (no double-authoring, no drift). External (non-scoped) citing-case
-metadata lives in EXTERNAL_OPINIONS so build_data.py can populate cited_by
-views for those edges too.
+Exposes `load() -> DataSource`, like `real_data`.
 """
 
 from __future__ import annotations
 
-# ── Scoped-in cluster IDs ──────────────────────────────────────────────
-SCOPED_CLUSTER_IDS = frozenset(
-    {
-        145918,  # Pearson v. Callahan (SCOTUS 2009)
-        118449,  # Saucier v. Katz (SCOTUS 2001)
-        110763,  # Harlow v. Fitzgerald (SCOTUS 1982)
-        1425860,  # Callahan v. Millard County (10th Cir. 2007)
-        220962,  # Henry v. Purnell (4th Cir. 2011 en banc)
-        203857,  # Maldonado v. Fontanes (1st Cir. 2009)
-        807646,  # Lacey v. Arpaio (9th Cir. 2012 en banc)
-        2219834,  # Martinez v. City of Schenectady (NY Ct App 2001)
-        1801687,  # Hernandez v. City of Pomona (Cal. 2009)
-        9999001,  # Callahan v. Millard County Sheriff (D. Utah, fabricated)
-    }
-)
+from data_source import DataSource, JsonDict
 
 # ── Court display names ────────────────────────────────────────────────
 COURT_DISPLAY = {
@@ -139,8 +115,8 @@ def opinion(
     court: str,
     date_filed: str,
     document_text: str,
-) -> dict:
-    """A scoped-in opinion: rendered as its own page on the demo site."""
+) -> JsonDict:
+    """An opinion with its own page."""
     return {
         "cluster_id": cluster_id,
         "case_name": case_name,
@@ -159,12 +135,8 @@ def external_op(
     citations: list[str],
     court: str,
     date_filed: str,
-) -> dict:
-    """Stand-in metadata for a citing or cited case that isn't in the
-    scoped 10. Used to populate authorities[] / cited_by[] entries for
-    edges that touch non-scoped clusters. Doesn't get its own opinion
-    page in the demo.
-    """
+) -> JsonDict:
+    """Metadata for a citing case that has no page of its own."""
     return {
         "cluster_id": cluster_id,
         "case_name": case_name,
@@ -181,33 +153,17 @@ def edge(
     treatment: str,
     quote: str,
     rationale: str,
-    section_context: str = "",
     source: str = "model",
     expert_treatment: str | None = None,
-    **_legacy: object,
-) -> dict:
-    """A single treatment relationship — the canonical row.
-
-    - `source` mirrors production's CitatorTreatment.source (model /
-      expert / user_correction). The demo's display indicator (🔵 / ⚪ /
-      🟠) is computed from source + expert_treatment at render time.
-    - `expert_treatment` is a demo-only field: when present and different
-      from `treatment` on a model row, the row is flagged 🟠 (model
-      disagrees with expert). Production derives this from joining a
-      paired-expert row.
-    - `section_context` is a paragraph from the citing opinion containing
-      the quote — used to slice real before/after sentences in the
-      Cited By tab. Production analog: CitatorExtractedCitation.section_context.
-    - `**_legacy` swallows obsolete keyword arguments (e.g., `section_id`)
-      so existing entries can be cleaned up incrementally.
-    """
+) -> JsonDict:
+    """One treatment relationship. `source` is model or expert;
+    `expert_treatment` is the expert's label when it differs."""
     return {
         "citing_cluster_id": citing_cluster_id,
         "cited_cluster_id": cited_cluster_id,
         "treatment": treatment,
         "quote": quote,
         "rationale": rationale,
-        "section_context": section_context,
         "source": source,
         "expert_treatment": expert_treatment,
     }
@@ -805,7 +761,6 @@ EDGES = [
         treatment="Affirmed by",
         quote="Holding that the district court was correct in its determination that Mr. Callahan's constitutional rights were violated",
         rationale="Direct procedural history: 10th Cir. affirmed lower court's constitutional-violation finding (reversed only on the clearly-established prong).",
-        section_context="Holding that the district court was correct in its determination that Mr. Callahan's constitutional rights were violated, but incorrect in its determination that these rights were not clearly established, we reverse in part and remand.",
         source="expert",
     ),
     # ── Direct History: Pearson -> Callahan-10th -- REVERSED
@@ -815,7 +770,6 @@ EDGES = [
         treatment="Reversed by",
         quote="we reverse and remand for further proceedings consistent with this opinion",
         rationale="Direct procedural history: SCOTUS reversed 10th Cir. denial of QI.",
-        section_context="On appeal, a divided panel of the Tenth Circuit held that petitioners' conduct violated respondent's Fourth Amendment rights. Callahan v. Millard Cty., 494 F. 3d 891 (2007). For the reasons set forth above, we reverse and remand for further proceedings consistent with this opinion.",
         source="expert",
     ),
     # ── Direct History: Fabricated SCOTUS affirmance of Henry v. Purnell
@@ -825,7 +779,6 @@ EDGES = [
         treatment="Affirmed by",
         quote="the judgment of the Court of Appeals is affirmed",
         rationale="Direct procedural history: SCOTUS (mock) affirmed 4th Cir. en banc denial of QI.",
-        section_context="On the question presented, the judgment of the Court of Appeals is affirmed. The officer's use of deadly force violated clearly established law.",
         source="model",
     ),
     # ── Pearson modifies Saucier (self court_relationship)
@@ -835,7 +788,6 @@ EDGES = [
         treatment="Limited by",
         quote="the Saucier procedure should not be regarded as an inflexible requirement",
         rationale="Pearson held Saucier's mandatory two-step ordering is no longer required.",
-        section_context="We now hold that the Saucier procedure should not be regarded as an inflexible requirement and that petitioners are entitled to qualified immunity on the ground that it was not clearly established at the time of the search that their conduct was unconstitutional. We therefore reverse.",
         source="expert",
     ),
     # ── Pearson cites Harlow
@@ -845,7 +797,6 @@ EDGES = [
         treatment="Cited by",
         quote="The doctrine of qualified immunity protects government officials",
         rationale="Pearson cites Harlow for the canonical QI standard.",
-        section_context='The doctrine of qualified immunity protects government officials "from liability for civil damages insofar as their conduct does not violate clearly established statutory or constitutional rights of which a reasonable person would have known." Harlow v. Fitzgerald, 457 U. S. 800, 818 (1982).',
         source="model",
     ),
     # ── Saucier cites Harlow
@@ -855,7 +806,6 @@ EDGES = [
         treatment="Cited by",
         quote="avoid excessive disruption of government and permit the resolution of many insubstantial claims on summary judgment",
         rationale="Saucier cites Harlow's policy rationale.",
-        section_context='The approach the Court of Appeals adopted could undermine the goal of qualified immunity to "avoid excessive disruption of government and permit the resolution of many insubstantial claims on summary judgment." Harlow v. Fitzgerald, 457 U. S. 800, 818 (1982).',
         source="model",
     ),
     # ── Callahan-10th cites Saucier (applies the two-step)
@@ -865,7 +815,6 @@ EDGES = [
         treatment="Cited by",
         quote="If no constitutional right would have been violated were the allegations established",
         rationale="10th Cir. applies Saucier's mandatory two-step.",
-        section_context="If no constitutional right would have been violated were the allegations established, there is no necessity for further inquiries concerning qualified immunity — quoting Saucier v. Katz, 533 U.S. 194, 201 (2001). If the plaintiff establishes that a constitutional right was violated, then the plaintiff must also show that the violated right was clearly established.",
         source="model",
     ),
     # ── D. Utah Callahan cites Saucier
@@ -875,7 +824,6 @@ EDGES = [
         treatment="Cited by",
         quote="the two-step inquiry set out by the Supreme Court",
         rationale="District court applies Saucier's two-step.",
-        section_context="The applicable framework is the two-step inquiry set out by the Supreme Court in Saucier v. Katz, 533 U.S. 194 (2001), governed in this Circuit by the gloss our Court of Appeals applied in earlier cases.",
         source="model",
     ),
     # ── Henry v. Purnell cites Saucier (recognizing modification by Pearson)
@@ -885,7 +833,6 @@ EDGES = [
         treatment="Limited as recognized by",
         quote="Saucier v. Katz, 533 U.S. 194, 206 (2001), overruled in part",
         rationale='Henry recognizes Pearson modified Saucier ("as recognized by" / Related Reference).',
-        section_context="Saucier v. Katz, 533 U.S. 194, 206 (2001), overruled in part, Pearson v. Callahan, 129 S. Ct. 808 (2009). Following the Supreme Court's recent decision in Pearson, we exercise our discretion to use the two-step procedure of Saucier.",
         source="expert",
     ),
     # ── Henry v. Purnell cites Pearson (the case that modified Saucier)
@@ -895,7 +842,6 @@ EDGES = [
         treatment="Cited by",
         quote="Following the Supreme Court's recent decision in Pearson",
         rationale="Henry cites Pearson as the modifying authority.",
-        section_context="Following the Supreme Court's recent decision in Pearson, we exercise our discretion to use the two-step procedure of Saucier, that asks first whether a constitutional violation occurred and second whether the right violated was clearly established.",
         source="model",
     ),
     # ── Henry cites Harlow
@@ -905,7 +851,6 @@ EDGES = [
         treatment="Cited by",
         quote="a test that focuses on the objective legal reasonableness",
         rationale="Henry cites Harlow's objective-reasonableness articulation.",
-        section_context='The second prong is "a test that focuses on the objective legal reasonableness of an official\'s acts." Harlow v. Fitzgerald, 457 U.S. 800, 819 (1982).',
         source="model",
     ),
     # ── Maldonado cites Pearson
@@ -915,7 +860,6 @@ EDGES = [
         treatment="Cited by",
         quote="Pearson also held that while it is frequently appropriate for courts to answer each step in turn, it is not mandatory",
         rationale="Maldonado applies Pearson's permissive sequencing rule.",
-        section_context="Pearson also held that while it is frequently appropriate for courts to answer each step in turn, it is not mandatory that courts follow the two-step analysis sequentially. Courts have discretion to decide whether, on the facts of a particular case, it is worthwhile to address first whether the facts alleged make out a violation of a constitutional right.",
         source="model",
     ),
     # ── Maldonado cites Saucier
@@ -925,7 +869,6 @@ EDGES = [
         treatment="Cited by",
         quote="the salient question is whether the state of the law at the time of the alleged violation gave the defendant fair warning",
         rationale="Maldonado cites Saucier's clearly-established formulation.",
-        section_context="The relevant, dispositive inquiry in determining whether a right is clearly established is whether it would be clear to a reasonable officer that his conduct was unlawful in the situation he confronted — quoting Saucier v. Katz, 533 U.S. at 202.",
         source="model",
         expert_treatment="Distinguished by",
     ),
@@ -936,7 +879,6 @@ EDGES = [
         treatment="Cited by",
         quote="We have the discretion to decide which of the two prongs of the qualified immunity analysis should be addressed first",
         rationale="Lacey applies Pearson's discretionary ordering rule.",
-        section_context="We have the discretion to decide which of the two prongs of the qualified immunity analysis should be addressed first in light of the circumstances in the particular case at hand. Pearson, 555 U.S. at 236.",
         source="model",
     ),
     # ── Lacey cites Saucier
@@ -946,7 +888,6 @@ EDGES = [
         treatment="Cited by",
         quote="we ask whether the facts alleged show the officer's conduct violated a constitutional right",
         rationale="Lacey applies Saucier's first prong.",
-        section_context="Determining whether a defendant is entitled to qualified immunity involves a two-pronged analysis. First, we ask whether the facts alleged show the officer's conduct violated a constitutional right — Saucier v. Katz, 533 U.S. 194, 201 (2001), overruled in part by Pearson, 555 U.S. at 235–236.",
         source="model",
     ),
     # ── Lacey cites Harlow
@@ -956,7 +897,6 @@ EDGES = [
         treatment="Cited by",
         quote='Qualified immunity "represents the norm" for government officials',
         rationale="Lacey cites Harlow as foundational QI authority.",
-        section_context='Qualified immunity "represents the norm" for government officials exercising discretionary authority, Harlow v. Fitzgerald, 457 U.S. 800, 807 (1982), including prosecutors who are not acting as an advocate for the state and may not be entitled to absolute immunity.',
         source="model",
     ),
     # ── Sister-circuit edge: Lacey distinguishes Maldonado
@@ -966,7 +906,6 @@ EDGES = [
         treatment="Distinguished by",
         quote="The First Circuit's analysis in Maldonado v. Fontanes addressed substantive due process claims",
         rationale="Sister-circuit (horizontal_persuasive) — Lacey distinguishes Maldonado on factual posture.",
-        section_context="The First Circuit's analysis in Maldonado v. Fontanes addressed substantive due process claims with no allegation of First Amendment retaliation. Here, Lacey's claims are anchored in retaliation for newsgathering, a context Maldonado did not consider.",
         source="model",
     ),
     # ── Martinez (NY) cites Saucier
@@ -976,7 +915,6 @@ EDGES = [
         treatment="Cited by",
         quote="qualified immunity barred the assertion of the section 1983 claims",
         rationale="NY Court of Appeals notes federal QI ruling.",
-        section_context="The United States Court of Appeals for the Second Circuit reversed the denial of defendants' summary judgment motion, concluding as a matter of law that qualified immunity barred the assertion of the section 1983 claims against the police officers, applying the framework set out by the Supreme Court in Saucier v. Katz.",
         source="model",
     ),
     # ── Martinez (NY) cites Brown v. State of New York (Questioned)
@@ -986,7 +924,6 @@ EDGES = [
         treatment="Distinguished by",
         quote='the "narrow remedy" established in Brown v. State of New York cannot be stretched',
         rationale="Martinez distinguishes Brown's state-constitutional tort remedy.",
-        section_context='We agree with Supreme Court and the Appellate Division that the "narrow remedy" established in Brown v. State of New York (89 NY2d 172, 192 [1996]) cannot be stretched to fit the facts before us.',
         source="model",
     ),
     # ── Hernandez Pomona (CA) cites Saucier
@@ -996,7 +933,6 @@ EDGES = [
         treatment="Cited by",
         quote="high court precedent required the trial court first to decide whether Sanchez had violated Hernandez's constitutional rights",
         rationale="Cal. Sup. Ct. notes Saucier's mandatory ordering at the time of trial.",
-        section_context="At the time of the federal trial, high court precedent required the trial court first to decide whether Sanchez had violated Hernandez's constitutional rights, and then to decide the immunity question — Saucier v. Katz (2001) 533 U.S. 194, 201.",
         source="model",
     ),
     # ── Hernandez Pomona (CA) cites Pearson
@@ -1006,7 +942,6 @@ EDGES = [
         treatment="Cited by",
         quote="The high court recently changed this rule, holding that trial courts may decide the immunity question",
         rationale="Cal. Sup. Ct. acknowledges Pearson's change to the ordering rule.",
-        section_context="The high court recently changed this rule, holding that trial courts may decide the immunity question before (or without) determining whether there was a constitutional violation — Pearson v. Callahan (2009) 555 U.S. ___.",
         source="expert",
     ),
     # ── Sister-state edge: Hernandez Pomona cites Martinez
@@ -1016,7 +951,6 @@ EDGES = [
         treatment="Cited by",
         quote="the New York Court of Appeals confronted a similar preclusion question",
         rationale="Sister-state (horizontal_persuasive) — Cal. Sup. Ct. cites NY Court of Appeals as persuasive authority on §1983 preclusion.",
-        section_context="In Martinez v. City of Schenectady, 97 N.Y.2d 78 (2001), the New York Court of Appeals confronted a similar preclusion question and declined to extend the state constitutional tort remedy where federal courts had already resolved the underlying §1983 claim on qualified-immunity grounds.",
         source="model",
     ),
     # ── External edges — non-scoped citing/cited cases (populate cited_by)
@@ -1027,7 +961,6 @@ EDGES = [
         treatment="Cited by",
         quote="we follow the discretionary sequencing established in Pearson",
         rationale="SCOTUS post-Pearson case applying its rule.",
-        section_context="In analyzing the qualified-immunity defense, we follow the discretionary sequencing established in Pearson v. Callahan, 555 U.S. 223 (2009), which permits us to address the clearly-established prong without first deciding the constitutional question.",
         source="model",
     ),
     # Plumhoff cites Saucier
@@ -1037,7 +970,6 @@ EDGES = [
         treatment="Cited by",
         quote="we apply the two-step framework articulated in Saucier",
         rationale="SCOTUS QI case applying Saucier framework.",
-        section_context="In addressing the officers' qualified-immunity defense, we apply the two-step framework articulated in Saucier v. Katz, 533 U.S. 194 (2001), as modified by Pearson v. Callahan.",
         source="model",
     ),
     # Mullenix v. Luna criticizes the lower court's Pearson application
@@ -1047,7 +979,6 @@ EDGES = [
         treatment="Cited by",
         quote="Pearson did not require the Fifth Circuit to address the constitutional question",
         rationale="SCOTUS reverses 5th Cir. for not heeding Pearson's discretionary sequencing.",
-        section_context="Although Pearson did not require the Fifth Circuit to address the constitutional question, the lower court chose to do so and reached an erroneous conclusion. We need not address that error today.",
         source="model",
     ),
     # Hernandez v. Mesa cites Pearson
@@ -1057,7 +988,6 @@ EDGES = [
         treatment="Cited by",
         quote="our discretion to address either prong of the qualified-immunity inquiry first",
         rationale="SCOTUS Bivens / cross-border shooting case applying Pearson sequencing.",
-        section_context="Consistent with Pearson v. Callahan, 555 U.S. 223 (2009), we exercise our discretion to address either prong of the qualified-immunity inquiry first.",
         source="model",
     ),
     # Brosseau v. Haugen cites Saucier
@@ -1067,7 +997,6 @@ EDGES = [
         treatment="Cited by",
         quote="the second step of the qualified immunity analysis must be undertaken in light of the specific context",
         rationale="Pre-Pearson per-curiam SCOTUS case applying Saucier framework.",
-        section_context="As we explained in Saucier, the second step of the qualified immunity analysis must be undertaken in light of the specific context of the case, not as a broad general proposition.",
         source="model",
     ),
     # Scott v. Harris cites Saucier
@@ -1077,7 +1006,6 @@ EDGES = [
         treatment="Cited by",
         quote="we follow the order of analysis Saucier prescribed",
         rationale="SCOTUS pre-Pearson; mandatory two-step still good law at the time.",
-        section_context="In assessing qualified immunity, we follow the order of analysis Saucier prescribed: first whether a constitutional right would have been violated, and second whether the right was clearly established.",
         source="model",
     ),
     # Anderson v. Creighton cites Harlow
@@ -1087,7 +1015,6 @@ EDGES = [
         treatment="Cited by",
         quote="The contours of the right must be sufficiently clear",
         rationale="Anderson refines Harlow's clearly-established standard.",
-        section_context="The contours of the right must be sufficiently clear that a reasonable official would understand that what he is doing violates that right — extending Harlow v. Fitzgerald's articulation of the qualified-immunity inquiry.",
         source="expert",
     ),
     # Wilson v. Layne cites Harlow
@@ -1097,7 +1024,6 @@ EDGES = [
         treatment="Cited by",
         quote="the clearly-established analysis is conducted by reference to existing precedent",
         rationale="Wilson applies Harlow's clearly-established framework.",
-        section_context="As Harlow v. Fitzgerald instructs, the clearly-established analysis is conducted by reference to existing precedent at the time of the conduct.",
         source="model",
     ),
     # Henry v. Purnell (4th Cir. en banc) reversed D. Md. district court
@@ -1107,7 +1033,6 @@ EDGES = [
         treatment="Reversed by",
         quote="we reverse and remand",
         rationale="Direct history: 4th Cir. en banc reversed district court's grant of QI.",
-        section_context="The decision of the district court is REVERSED AND REMANDED. Purnell's use of deadly force against Henry was objectively unreasonable and violated clearly established law.",
         source="expert",
     ),
     # Maldonado v. Fontanes (1st Cir.) affirmed D.P.R. denial of QI
@@ -1117,7 +1042,6 @@ EDGES = [
         treatment="Affirmed by",
         quote="We affirm the denial of the Mayor's motion for qualified immunity",
         rationale="Direct history: 1st Cir. affirmed district court's denial of QI on Fourth Amendment / procedural due process claims.",
-        section_context="We affirm the denial of the Mayor's motion for qualified immunity on the Fourth Amendment and Fourteenth Amendment procedural due process claims, and reverse on the substantive due process claim.",
         source="expert",
     ),
     # Lacey v. Arpaio (9th Cir. en banc) affirmed-in-part / reversed-in-part D. Ariz.
@@ -1127,7 +1051,6 @@ EDGES = [
         treatment="Affirmed in part; Reversed in part by",
         quote="We affirm in part and reverse in part",
         rationale="Direct history: 9th Cir. en banc affirmed dismissal of some claims, reversed dismissal of others.",
-        section_context="We affirm in part and reverse in part, finding that Lacey adequately alleged several causes of action for which the defendants are not entitled to immunity. We remand for further proceedings.",
         source="model",
     ),
     # Hartman v. State (NY) cites Martinez
@@ -1137,7 +1060,6 @@ EDGES = [
         treatment="Cited by",
         quote="this Court declined in Martinez to extend the Brown remedy",
         rationale="Later NY Court of Appeals case citing Martinez on state constitutional torts.",
-        section_context="As this Court declined in Martinez v. City of Schenectady to extend the Brown remedy where the underlying federal claim had been resolved on qualified-immunity grounds, we similarly decline here.",
         source="model",
     ),
     # Robinson v. County of Los Angeles cites Hernandez Pomona
@@ -1147,7 +1069,6 @@ EDGES = [
         treatment="Cited by",
         quote="our decision in Hernandez v. City of Pomona controls the preclusion analysis",
         rationale="Later Cal. Sup. Ct. case applying Hernandez Pomona's preclusion holding.",
-        section_context="As we held in Hernandez v. City of Pomona, 46 Cal. 4th 501 (2009), our decision controls the preclusion analysis where the federal court has resolved the §1983 claim on qualified-immunity grounds.",
         source="model",
     ),
     # Susag v. Lake Forest (Ca App) cites Hernandez Pomona — wait, this is pre-2009. Skip.
@@ -1158,7 +1079,6 @@ EDGES = [
         treatment="Cited by",
         quote="Pearson permits courts to bypass the constitutional-violation prong",
         rationale="District court applies Pearson sequencing.",
-        section_context="Pearson v. Callahan permits courts to bypass the constitutional-violation prong and resolve the qualified-immunity defense on the clearly-established prong alone.",
         source="model",
     ),
     # Roe v. Phoenix Police cites Lacey (intra-9th-Cir district application)
@@ -1168,7 +1088,6 @@ EDGES = [
         treatment="Cited by",
         quote="Lacey v. Arpaio is binding authority on First Amendment retaliation claims",
         rationale="District court within 9th Cir. applies Lacey.",
-        section_context="In this Circuit, Lacey v. Arpaio is binding authority on First Amendment retaliation claims arising from law-enforcement conduct.",
         source="model",
         expert_treatment="Distinguished by",
     ),
@@ -1183,7 +1102,6 @@ EDGES = [
         treatment="Limited by",
         quote="the consent-once-removed analysis in Callahan must be read narrowly post-Pearson",
         rationale="Later 10th Cir. case limits Callahan's scope after Pearson reframed the QI inquiry.",
-        section_context="As we observed before, the consent-once-removed analysis in Callahan must be read narrowly post-Pearson; the rule does not extend to circumstances where the informant lacks ongoing authority to admit additional officers.",
         source="model",
         expert_treatment="Distinguished by",
     ),
@@ -1193,7 +1111,6 @@ EDGES = [
         treatment="Distinguished by",
         quote="Callahan addressed a controlled drug-buy posture not present here",
         rationale="Sister 10th Cir. panel distinguishes on facts.",
-        section_context="The plaintiff relies on our decision in Callahan v. Millard County, but Callahan addressed a controlled drug-buy posture not present here. The officers in this case entered without an antecedent invitation by an authorized resident.",
         source="model",
     ),
     edge(
@@ -1202,7 +1119,6 @@ EDGES = [
         treatment="Cited by",
         quote="we follow the framework laid out in Callahan",
         rationale="Within-circuit district court applies Callahan's framework.",
-        section_context="In analyzing the consent-once-removed defense, we follow the framework laid out in Callahan v. Millard County, 494 F.3d 891 (10th Cir. 2007), with the subsequent gloss our circuit has applied.",
         source="model",
     ),
     edge(
@@ -1211,7 +1127,6 @@ EDGES = [
         treatment="Declined to follow by",
         quote="we decline to adopt the consent-once-removed expansion endorsed by the Tenth Circuit in Callahan",
         rationale="Sister-circuit (6th Cir., horizontal_persuasive) declines to follow the 10th Cir. rule.",
-        section_context="Although our sister Circuit reached the opposite conclusion, we decline to adopt the consent-once-removed expansion endorsed by the Tenth Circuit in Callahan v. Millard County. The doctrine, as applied there, runs afoul of the Fourth Amendment's clear textual demand for warrant-based entry.",
         source="expert",
     ),
     edge(
@@ -1220,7 +1135,6 @@ EDGES = [
         treatment="Distinguished by",
         quote="the consent-once-removed analysis in Callahan does not extend to the present facts",
         rationale="Recent 10th Cir. case distinguishing — gives Callahan a divergent most-recent vs most-severe.",
-        section_context="The defendants invoke our prior decision in Callahan v. Millard County, but the consent-once-removed analysis in Callahan does not extend to the present facts. Here, no antecedent invitation gave the officers any color of authorization to enter.",
         source="model",
         expert_treatment="Cited by",
     ),
@@ -1231,7 +1145,6 @@ EDGES = [
         treatment="Cited by",
         quote="our en banc decision in Henry v. Purnell",
         rationale="Within-circuit follow-on; applies Henry's deadly-force / Garner standard.",
-        section_context="In assessing the officer's use of force, we apply the framework set out in our en banc decision in Henry v. Purnell, 652 F.3d 524 (4th Cir. 2011), which controls Fourth-Amendment excessive-force claims involving fleeing suspects.",
         source="model",
     ),
     edge(
@@ -1240,7 +1153,6 @@ EDGES = [
         treatment="Distinguished by",
         quote="Henry involved a stipulated mistake about the weapon used; here the officer concedes no mistake",
         rationale="Within-circuit panel distinguishes on the stipulated-fact posture.",
-        section_context="The plaintiff's reliance on Henry v. Purnell is misplaced: Henry involved a stipulated mistake about the weapon used; here the officer concedes no mistake. Henry's qualified-immunity ruling thus does not control.",
         source="model",
         expert_treatment="Cited by",
     ),
@@ -1250,7 +1162,6 @@ EDGES = [
         treatment="Cited by",
         quote="applying Henry v. Purnell's deadly-force framework",
         rationale="Within-circuit district court applies Henry.",
-        section_context="In applying Henry v. Purnell's deadly-force framework, the Court considers whether a reasonable officer in the defendant's position would have understood that lethal force was unjustified under the totality of the circumstances.",
         source="model",
     ),
     edge(
@@ -1259,7 +1170,6 @@ EDGES = [
         treatment="Criticized by",
         quote="we are unable to reconcile the result in Henry v. Purnell with the Supreme Court's framework",
         rationale="Sister-circuit (2nd Cir., horizontal_persuasive) criticizes the en banc result.",
-        section_context="With respect to our colleagues on the Fourth Circuit, we are unable to reconcile the result in Henry v. Purnell with the Supreme Court's framework for evaluating mistaken-belief uses of force. The objective-reasonableness inquiry should foreclose, not invite, second-guessing under the conditions there.",
         source="expert",
     ),
     edge(
@@ -1268,7 +1178,6 @@ EDGES = [
         treatment="Limited by",
         quote="Henry's holding is limited to the stipulated mistake-of-weapon scenario",
         rationale="Earlier within-circuit case narrows Henry's reach — gives Henry a divergent most-severe vs most-recent.",
-        section_context="As we have observed before, Henry's holding is limited to the stipulated mistake-of-weapon scenario. The court's analysis of objective unreasonableness was driven by that stipulated factual posture and does not generalize to ordinary deadly-force claims.",
         source="model",
     ),
     # Citing references to Maldonado v. Fontanes (1st Cir. 2009)
@@ -1278,7 +1187,6 @@ EDGES = [
         treatment="Cited by",
         quote="we follow Maldonado v. Fontanes's articulation of the post-Pearson sequencing rule",
         rationale="Within-circuit district court applies Maldonado.",
-        section_context="In addressing the qualified-immunity defense, we follow Maldonado v. Fontanes's articulation of the post-Pearson sequencing rule, exercising discretion to decide which prong to address first.",
         source="model",
     ),
     edge(
@@ -1287,7 +1195,6 @@ EDGES = [
         treatment="Distinguished by",
         quote="Maldonado involved a substantive due process claim; the present case is grounded entirely in Fourth Amendment seizure doctrine",
         rationale="Within-circuit panel distinguishes on the underlying constitutional claim.",
-        section_context="The plaintiff invokes our holding in Maldonado v. Fontanes, but that case is inapposite here. Maldonado involved a substantive due process claim; the present case is grounded entirely in Fourth Amendment seizure doctrine.",
         source="model",
     ),
     edge(
@@ -1296,7 +1203,6 @@ EDGES = [
         treatment="Affirmed in part; Reversed in part as recognized by",
         quote="Maldonado was later affirmed in part and reversed in part by the Supreme Court",
         rationale="Long-treatment fixture: within-circuit panel recognizes Maldonado's mixed appellate disposition.",
-        section_context="As we have previously noted, Maldonado was later affirmed in part and reversed in part by the Supreme Court, narrowing the procedural-due-process holding while preserving the qualified-immunity analysis.",
         source="model",
     ),
     # Citing references to Lacey v. Arpaio (9th Cir. 2012 en banc)
@@ -1306,7 +1212,6 @@ EDGES = [
         treatment="Distinguished by",
         quote="Lacey involved a high-profile arrest of journalists for newsgathering activity",
         rationale="Within-circuit panel distinguishes on the journalism context.",
-        section_context="The plaintiff relies on Lacey v. Arpaio, but Lacey involved a high-profile arrest of journalists for newsgathering activity. The First Amendment retaliation claim there arose from a categorically different context than the routine traffic stop at issue here.",
         source="model",
     ),
     edge(
@@ -1315,7 +1220,6 @@ EDGES = [
         treatment="Cited by",
         quote="our en banc decision in Lacey v. Arpaio",
         rationale="Within-circuit follow-on applying Lacey's First Amendment retaliation framework.",
-        section_context="As reaffirmed in our en banc decision in Lacey v. Arpaio, 693 F.3d 896 (9th Cir. 2012), retaliatory law-enforcement actions targeted at protected speech remain actionable under §1983.",
         source="model",
     ),
     edge(
@@ -1324,7 +1228,6 @@ EDGES = [
         treatment="Cited by",
         quote="Lacey v. Arpaio governs First Amendment retaliation analysis in this Circuit",
         rationale="Within-circuit district court applies Lacey.",
-        section_context="Lacey v. Arpaio governs First Amendment retaliation analysis in this Circuit, and we apply its framework to evaluate the plaintiff's claim that her arrest was retaliatory.",
         source="model",
     ),
     # Citing references to Hernandez v. City of Pomona (Cal. 2009)
@@ -1334,7 +1237,6 @@ EDGES = [
         treatment="Distinguished by",
         quote="Hernandez addressed preclusion arising from a federal qualified-immunity ruling",
         rationale="Same court (Cal. Supreme self-citation) distinguishes on procedural posture.",
-        section_context="The defendants invoke our preclusion analysis in Hernandez v. City of Pomona, but the procedural posture here is different. Hernandez addressed preclusion arising from a federal qualified-immunity ruling; here, the underlying federal action was dismissed without prejudice on jurisdictional grounds.",
         source="expert",
     ),
     edge(
@@ -1343,7 +1245,6 @@ EDGES = [
         treatment="Cited by",
         quote="Hernandez v. City of Pomona controls the issue-preclusion analysis",
         rationale="State appellate court applies Hernandez.",
-        section_context="Where the federal court has resolved an excessive-force §1983 claim on qualified-immunity grounds, our Supreme Court's decision in Hernandez v. City of Pomona, 46 Cal. 4th 501 (2009), controls the issue-preclusion analysis.",
         source="model",
     ),
     # Citing references to Martinez v. City of Schenectady (NY 2001)
@@ -1353,7 +1254,6 @@ EDGES = [
         treatment="Distinguished by",
         quote="Martinez involved a federal qualified-immunity ruling that triggered preclusion",
         rationale="Same court distinguishes on procedural posture.",
-        section_context="The defendants point to Martinez v. City of Schenectady, but Martinez involved a federal qualified-immunity ruling that triggered preclusion of the state constitutional tort claim. The present plaintiff faced no parallel federal proceeding.",
         source="model",
     ),
     edge(
@@ -1362,7 +1262,6 @@ EDGES = [
         treatment="Limited by",
         quote="Martinez's preclusion holding does not extend beyond the search-warrant context",
         rationale="Same court (NY Court of Appeals) narrows Martinez.",
-        section_context="To the extent later decisions have read Martinez expansively, we now clarify that Martinez's preclusion holding does not extend beyond the search-warrant context. The state-constitutional remedy remains available where the federal claim turns on different operative facts.",
         source="model",
         expert_treatment="Distinguished by",
     ),
@@ -1373,7 +1272,6 @@ EDGES = [
         treatment="Distinguished by",
         quote="the district court's analysis in Callahan v. Millard County Sheriff turned on the consent-once-removed posture",
         rationale="Later D. Utah opinion distinguishes on facts.",
-        section_context="The plaintiff's reliance on the district court's analysis in Callahan v. Millard County Sheriff turned on the consent-once-removed posture, which is not present here. We need not address whether the framework articulated there has survived Pearson's reframing of the qualified-immunity inquiry.",
         source="model",
     ),
     edge(
@@ -1382,7 +1280,24 @@ EDGES = [
         treatment="Cited by",
         quote="the consent-once-removed framework outlined in Callahan v. Millard County Sheriff",
         rationale="Within-court (D. Utah) cites for fact-bound analysis.",
-        section_context="In applying the consent-once-removed framework outlined in Callahan v. Millard County Sheriff, we consider whether the antecedent invitation extended to subsequent law-enforcement entry under the totality of the circumstances.",
         source="model",
     ),
 ]
+
+
+def load() -> DataSource:
+    """The fixtures as a DataSource."""
+    return DataSource(
+        opinions=SCOPED_OPINIONS,
+        edges=EDGES,
+        external_opinions=EXTERNAL_OPINIONS,
+        court_display=COURT_DISPLAY,
+        court_level=COURT_LEVEL,
+        court_category=COURT_CATEGORY,
+        courts_of_last_resort=COURTS_OF_LAST_RESORT,
+        category_display=CATEGORY_DISPLAY,
+        category_order=CATEGORY_ORDER,
+        category_jurisdiction=CATEGORY_JURISDICTION,
+        jurisdiction_display=JURISDICTION_DISPLAY,
+        jurisdiction_order=JURISDICTION_ORDER,
+    )

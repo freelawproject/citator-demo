@@ -1,685 +1,858 @@
-"""Transforms mock fixtures (or, eventually, real inference output) into the
-Eleventy data contract documented in
-ai-research/citator_launch_plan/demo_site_design.md § Data contract.
+"""Build the JSON the Eleventy templates consume.
 
-Outputs:
-    _data/opinions/{cluster_id}.json   one per scoped opinion
-    _data/index.json                    global listing for Search Results
+Reads a data module (`real_data` by default, `mock_data` when
+CITATOR_DEMO_DATA=mock) and writes to `_data/`:
 
-Real-data swap (issue #13) replaces the mock_data import below with a function
-that reads CSVs from data-source/.
+    opinions/{cluster_id}.json  one per opinion page
+    index.json                  the home page's opinion list
+    scope.json                  counts for the About page
+    flags.json                  build flags (see FLAGS)
+    courts.json                 every court in scope
+    court_picker.json           the home page's court picker
+    court_categories.json, court_jurisdictions.json
+    treatments.json             the treatment taxonomy by severity tier
 
-Single-source-of-truth: mock_data.EDGES is the canonical list of treatment
-relationships. authorities[] (where opinion = citing side) and cited_by[]
-(where opinion = cited side) are derived views — no double-authoring, no
-drift, mirroring production's CitatorTreatment table.
+The data source's `edges` are the single record of treatments. The Cited
+By tab of a cited opinion is derived from them; the Authorities tab of a
+citing opinion comes from its `citation_groups` rows.
+
+Environment:
+    CITATOR_DEMO_DATA=mock         build from the hand-written fixtures
+    CITATOR_DEMO_VALIDATION=1      show the expert-validation marks
 """
 
 from __future__ import annotations
 
+import importlib
 import json
+import os
 import re
-from html import escape
 from pathlib import Path
+from typing import Any
 
-from mock_data import (
-    CATEGORY_DISPLAY,
-    CATEGORY_JURISDICTION,
-    CATEGORY_ORDER,
-    COURT_CATEGORY,
-    COURT_DISPLAY,
-    COURT_LEVEL,
-    COURTS_OF_LAST_RESORT,
-    EDGES,
-    EXTERNAL_OPINIONS,
-    JURISDICTION_DISPLAY,
-    JURISDICTION_ORDER,
-    SCOPED_CLUSTER_IDS,
-    SCOPED_OPINIONS,
+from courts import court_list, court_picker_tabs
+from data_source import DataSource, JsonDict, short_date
+from history import AppellateHistory
+from model_output import (
+    disposition_label,
+    document_token_streams,
+    expand_quote,
+    quote_names_case,
+    verify_quote,
 )
-
-# ── Canonical severity map ─────────────────────────────────────────────
-SEVERITY_BY_TREATMENT = {
-    # Stop
-    "Reversed by": "Stop",
-    "Reversed and remanded by": "Stop",
-    "Vacated by": "Stop",
-    "Vacated and remanded by": "Stop",
-    "Overruled by": "Stop",
-    "Abrogated by": "Stop",
-    "Questioned by": "Stop",
-    # Warning
-    "Affirmed in part; Reversed in part by": "Warning",
-    "Affirmed in part; Vacated in part by": "Warning",
-    "Disapproved by": "Warning",
-    "Limited by": "Warning",
-    # Caution
-    "Remanded by": "Caution",
-    "Cert. granted by": "Caution",
-    "Criticized by": "Caution",
-    "Distinguished by": "Caution",
-    "Declined to follow by": "Caution",
-    # Neutral
-    "Dismissed by": "Neutral",
-    "Affirmed by": "Neutral",
-    "Cert. denied by": "Neutral",
-    "Cited by": "Neutral",
-}
-
-SEVERITY_RANK = {
-    "Stop": 0,
-    "Warning": 1,
-    "Caution": 2,
-    "Neutral": 3,
-}
-NEGATIVE_TIERS = {"Stop", "Warning", "Caution"}
-
-# Treatments that produce Direct History direction (procedural appellate
-# review of the same case).
-DIRECT_HISTORY_TREATMENTS = {
-    "Reversed by",
-    "Reversed and remanded by",
-    "Vacated by",
-    "Vacated and remanded by",
-    "Affirmed by",
-    "Affirmed in part; Reversed in part by",
-    "Affirmed in part; Vacated in part by",
-    "Cert. denied by",
-    "Cert. granted by",
-    "Remanded by",
-    "Dismissed by",
-}
-
-# Treatments that require the citing court to have authority over the cited
-# court (vertical_binding) or be the same court (self). Sister-court
-# applications are not legally possible for these.
-VERTICAL_OR_SELF_TREATMENTS = DIRECT_HISTORY_TREATMENTS | {
-    "Overruled by",
-    "Abrogated by",
-}
+from render import excerpt_from_text, render_body_html
+from taxonomy import (
+    DIRECT_HISTORY_TREATMENTS,
+    NEGATIVE_TIERS,
+    VERTICAL_OR_SELF_TREATMENTS,
+    base_treatment,
+    direction_for,
+    is_recognized,
+    past_tense,
+    recognized_form,
+    recognizes_label,
+    row_validation,
+    severity_for,
+    severity_rank,
+    to_active_voice,
+    treatment_table,
+    validate_pills,
+    worst_tier,
+)
 
 OUT_DIR = Path(__file__).parent.parent / "_data"
 OPINIONS_OUT = OUT_DIR / "opinions"
+CL_OPINION_URL = "https://www.courtlistener.com/opinion/{cluster_id}/x/"
 
-
-def severity_for(treatment: str) -> str:
-    """Map a treatment label to its severity tier.
-
-    "As recognized by" treatments inherit the underlying treatment's tier
-    per the canonical taxonomy in `ai-research/CLAUDE.md` § Treatments —
-    e.g., "Overruled as recognized by" → Stop (because Overruled by is
-    Stop), "Limited as recognized by" → Warning. The "Related" pseudo-
-    tier from earlier mock revisions is gone; Related Reference is a
-    direction (in `direction_for`), not a severity.
-    """
-    if not isinstance(treatment, str):
-        return "Other"
-    if "as recognized by" in treatment:
-        treatment = treatment.replace(" as recognized", "")
-    return SEVERITY_BY_TREATMENT.get(treatment, "Other")
-
-
-def direction_for(treatment: str) -> str:
-    if "as recognized by" in treatment:
-        return "Related Reference"
-    if treatment in DIRECT_HISTORY_TREATMENTS:
-        return "Direct History"
-    return "Citing Reference"
-
-
-# ── Document body rendering ────────────────────────────────────────────
-SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
-CITED_CASE_RE = re.compile(
-    r'<citedCase data-cluster-id="(\d+)">(.+?)</citedCase>'
-)
-
-
-def excerpt_from_text(document_text: str, max_chars: int = 280) -> str:
-    text = SECTION_RE.sub("", document_text)
-    text = CITED_CASE_RE.sub(r"\2", text)
-    paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
-    if not paragraphs:
-        return ""
-    first = paragraphs[0]
-    if len(first) <= max_chars:
-        return first
-    truncated = first[:max_chars]
-    cut = truncated.rfind(". ")
-    if cut > max_chars * 0.6:
-        return truncated[: cut + 1]
-    return truncated.rstrip() + "…"
-
-
-def section_anchor(section_id: str) -> str:
-    safe = re.sub(r"[^A-Za-z0-9]+", "-", section_id).strip("-")
-    return f"section-{safe}" if safe else ""
-
-
-def render_body_html(document_text: str) -> tuple[str, list[dict]]:
-    text = document_text.strip()
-    parts = SECTION_RE.split(text)
-    pre = parts[0]
-    section_pairs = list(zip(parts[1::2], parts[2::2], strict=False))
-
-    sections_meta = [
-        {
-            "id": sid.strip(),
-            "title": sid.strip(),
-            "anchor": section_anchor(sid.strip()),
-        }
-        for sid, _ in section_pairs
-    ]
-
-    out_chunks: list[str] = []
-    if pre.strip():
-        out_chunks.append(_render_paragraphs(pre))
-    for sid, body in section_pairs:
-        sid_clean = sid.strip()
-        anchor = section_anchor(sid_clean)
-        out_chunks.append(
-            f'<section id="{anchor}" data-section-id="{escape(sid_clean)}">'
-            f"<h2>{escape(sid_clean)}</h2>"
-            f"{_render_paragraphs(body)}"
-            f"</section>"
-        )
-    return "\n".join(out_chunks), sections_meta
-
-
-def _render_paragraphs(text: str) -> str:
-    paragraphs = [p.strip() for p in text.strip().split("\n\n") if p.strip()]
-    rendered = []
-    for p in paragraphs:
-        out = []
-        last = 0
-        for m in CITED_CASE_RE.finditer(p):
-            out.append(escape(p[last : m.start()]))
-            cluster_id = int(m.group(1))
-            label = m.group(2)
-            if cluster_id in SCOPED_CLUSTER_IDS:
-                out.append(
-                    f'<a class="cited-case cited-case--scoped" '
-                    f'href="/opinion/{cluster_id}/">{escape(label)}</a>'
-                )
-            else:
-                out.append(f'<span class="cited-case">{escape(label)}</span>')
-            last = m.end()
-        out.append(escape(p[last:]))
-        rendered.append(f"<p>{''.join(out)}</p>")
-    return "\n".join(rendered)
-
-
-# ── Quote-in-context lookup ────────────────────────────────────────────
-SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
-
-
-def find_quote_context(
-    section_context: str, quote: str, n_sentences: int = 3
-) -> dict:
-    """Slice up to N sentences before/after the quote inside the citing
-    opinion's section_context paragraph. Returns {before, quote, after}."""
-    if not section_context:
-        return {"before": "", "quote": quote, "after": ""}
-    plain = re.sub(r"\s+", " ", section_context).strip()
-    idx = plain.lower().find(quote.lower())
-    if idx < 0:
-        return {"before": "", "quote": quote, "after": ""}
-    quote_actual = plain[idx : idx + len(quote)]
-    before_text = plain[:idx].strip()
-    after_text = plain[idx + len(quote) :].strip()
-    before_sentences = [s for s in SENTENCE_SPLIT_RE.split(before_text) if s]
-    after_sentences = [s for s in SENTENCE_SPLIT_RE.split(after_text) if s]
-    return {
-        "before": " ".join(before_sentences[-n_sentences:]),
-        "quote": quote_actual,
-        "after": " ".join(after_sentences[:n_sentences]),
-    }
-
-
-# ── Active-voice rewriting (Authorities tab) ───────────────────────────
-ACTIVE_VOICE = {
-    "Reversed by": "Reverses",
-    "Reversed and remanded by": "Reverses and remands",
-    "Vacated by": "Vacates",
-    "Vacated and remanded by": "Vacates and remands",
-    "Overruled by": "Overrules",
-    "Abrogated by": "Abrogates",
-    "Questioned by": "Questions",
-    "Affirmed in part; Reversed in part by": "Affirms in part; Reverses in part",
-    "Affirmed in part; Vacated in part by": "Affirms in part; Vacates in part",
-    "Disapproved by": "Disapproves",
-    "Limited by": "Limits",
-    "Remanded by": "Remands",
-    "Cert. granted by": "Granted cert.",
-    "Criticized by": "Criticizes",
-    "Distinguished by": "Distinguishes",
-    "Declined to follow by": "Declines to follow",
-    "Dismissed by": "Dismisses",
-    "Affirmed by": "Affirms",
-    "Cert. denied by": "Denied cert.",
-    "Cited by": "Cites",
+# Build flags, written to _data/flags.json and read by the templates.
+# `validation`: show the marks comparing each treatment with the expert's
+# label. An internal review aid, off unless the build asks for it.
+FLAGS: dict[str, bool] = {
+    "validation": os.environ.get("CITATOR_DEMO_VALIDATION", "")
+    not in ("", "0", "false"),
 }
 
 
-def to_active_voice(treatment: str) -> str:
-    if treatment in ACTIVE_VOICE:
-        return ACTIVE_VOICE[treatment]
-    # "X as recognized by" → "Recognizes as x" (the citing opinion notes
-    # that the cited authority was previously X'd by some other case).
-    if "as recognized by" in treatment:
-        base = treatment.replace(" as recognized by", "").strip()
-        return f"Recognizes as {base.lower()}"
-    if treatment.endswith(" by"):
-        return treatment[:-3]
-    return treatment
+def load_data_source() -> DataSource:
+    """The data module named by CITATOR_DEMO_DATA (default: real data)."""
+    name = (
+        "mock_data"
+        if os.environ.get("CITATOR_DEMO_DATA") == "mock"
+        else "real_data"
+    )
+    module = importlib.import_module(name)
+    source: DataSource = module.load()
+    return source
 
 
-# ── Opinion lookup ─────────────────────────────────────────────────────
-def _build_opinion_index() -> dict[int, dict]:
-    """Combined lookup of all opinion metadata (scoped + external),
-    keyed by cluster_id."""
-    idx: dict[int, dict] = {}
-    for op in SCOPED_OPINIONS:
-        idx[op["cluster_id"]] = op
-    for cid, ext in EXTERNAL_OPINIONS.items():
-        idx[cid] = ext
-    return idx
-
-
-OPINION_INDEX = _build_opinion_index()
-
-
-def _enrich_court(record: dict) -> dict:
-    return {
-        **record,
-        "court_display": COURT_DISPLAY.get(record["court"], record["court"]),
-        "court_level": COURT_LEVEL.get(record["court"]),
-    }
-
-
-# ── Hierarchy validation ───────────────────────────────────────────────
+# ── Edge validation ─────────────────────────────────────────────────────
 class HierarchyError(ValueError):
-    pass
+    """An edge the court hierarchy or the dates rule out. `kind` is
+    "temporal" (the citing opinion predates the cited one, so the link is
+    wrong) or "hierarchy" (the treatment needs a higher court)."""
+
+    def __init__(self, message: str, kind: str = "hierarchy") -> None:
+        super().__init__(message)
+        self.kind = kind
 
 
-def validate_edge(edge: dict) -> None:
-    """Raise if the edge's (treatment, citing_level, cited_level) tuple is
-    hierarchically impossible. Citation references are permissive; direct
-    history and overrule-class treatments require vertical or self."""
+def validate_edge(
+    edge: JsonDict, index: dict[int, JsonDict], court_level: dict[str, int]
+) -> None:
+    """Raise HierarchyError when an edge is impossible. Citing references
+    are permissive; direct history needs a strictly higher citing court,
+    overruling-class treatments a court at or above the cited one."""
     treatment = edge["treatment"]
-    citing_id = edge["citing_cluster_id"]
-    cited_id = edge["cited_cluster_id"]
-    citing_op = OPINION_INDEX.get(citing_id)
-    cited_op = OPINION_INDEX.get(cited_id)
-    if citing_op is None or cited_op is None:
+    citing = index.get(edge["citing_cluster_id"])
+    cited = index.get(edge["cited_cluster_id"])
+    if citing is None or cited is None:
         raise HierarchyError(
-            f"Edge references unknown cluster: {citing_id} -> {cited_id}"
+            f"Edge references unknown cluster: "
+            f"{edge['citing_cluster_id']} -> {edge['cited_cluster_id']}"
         )
-    citing_level = COURT_LEVEL.get(citing_op["court"])
-    cited_level = COURT_LEVEL.get(cited_op["court"])
+    citing_level = court_level.get(citing["court"])
+    cited_level = court_level.get(cited["court"])
     if citing_level is None or cited_level is None:
         raise HierarchyError(
             f"Edge references court without level: "
-            f"{citing_op['court']} -> {cited_op['court']}"
+            f"{citing['court']} -> {cited['court']}"
         )
-
-    # Temporal: citing case must be filed after cited case
+    pair = (
+        f"{citing['case_name']} ({citing['court']}) -> "
+        f"{cited['case_name']} ({cited['court']})"
+    )
     if (
         edge["citing_cluster_id"] != edge["cited_cluster_id"]
-        and citing_op["date_filed"] <= cited_op["date_filed"]
+        and citing["date_filed"] <= cited["date_filed"]
     ):
         raise HierarchyError(
-            f"Temporal violation: {citing_op['case_name']} "
-            f"({citing_op['date_filed']}) cannot cite "
-            f"{cited_op['case_name']} ({cited_op['date_filed']})"
+            f"Temporal violation: {citing['case_name']} "
+            f"({citing['date_filed']}) cannot cite "
+            f"{cited['case_name']} ({cited['date_filed']})",
+            kind="temporal",
         )
-
-    # Direct-history treatments require citing strictly higher than cited.
     if treatment in DIRECT_HISTORY_TREATMENTS and citing_level >= cited_level:
         raise HierarchyError(
-            f"Direct-history treatment '{treatment}' requires citing "
-            f"court above cited court: "
-            f"{citing_op['case_name']} ({citing_op['court']}) -> "
-            f"{cited_op['case_name']} ({cited_op['court']})"
+            f"Direct-history treatment '{treatment}' requires citing court "
+            f"above cited court: {pair}"
         )
-    # Other vertical-or-self treatments (Overruled by, Abrogated by) require
-    # citing court at or above cited court.
-    elif (
-        treatment in VERTICAL_OR_SELF_TREATMENTS and citing_level > cited_level
-    ):
+    if treatment in VERTICAL_OR_SELF_TREATMENTS and citing_level > cited_level:
         raise HierarchyError(
             f"Treatment '{treatment}' requires citing court at or above "
-            f"cited court: "
-            f"{citing_op['case_name']} ({citing_op['court']}) -> "
-            f"{cited_op['case_name']} ({cited_op['court']})"
+            f"cited court: {pair}"
         )
 
 
-# ── Edge → view conversion ─────────────────────────────────────────────
-def _row_id(prefix: str, edge_idx: int) -> str:
-    return f"{prefix}-{edge_idx}"
+# ── Sort keys ───────────────────────────────────────────────────────────
+def _name_key(name: str) -> tuple[bool, str]:
+    """Alphabetical key ignoring case and punctuation; unnamed opinions
+    sort last."""
+    cleaned = re.sub(r"[^a-z0-9 ]+", " ", (name or "").lower()).strip()
+    return (not cleaned or cleaned.startswith("unnamed opinion"), cleaned)
 
 
-def edge_to_authority_view(edge: dict, edge_idx: int) -> dict:
-    """For the citing side: this opinion's `authorities[]` entry."""
-    cited = _enrich_court(OPINION_INDEX[edge["cited_cluster_id"]])
-    treatment = edge["treatment"]
+def _desc(value: str) -> tuple[bool, tuple[int, ...]]:
+    """Key that sorts ISO dates newest first and undated values last."""
+    return (not value, tuple(-ord(c) for c in value))
+
+
+def _stamp_ranks(rows: list[JsonDict], keys: dict[str, Any]) -> None:
+    """Write each row's position under every sort key, so the tab can
+    reorder with CSS `order` instead of rebuilding the list."""
+    for field, key in keys.items():
+        for rank, row in enumerate(sorted(rows, key=key)):
+            row[field] = rank
+
+
+# ── Cited By rows ───────────────────────────────────────────────────────
+def _pill(kind: str, row: JsonDict) -> JsonDict:
+    """One treatment on a Cited By row: what the citing opinion did
+    (applied) or reports another court did (recognized)."""
     return {
-        "row_id": _row_id("auth", edge_idx),
-        "cited_cluster_id": cited["cluster_id"],
-        "cited_case_name": cited["case_name"],
-        "cited_docket_number": cited.get("docket_number", ""),
-        "cited_citations": cited["citations"],
-        "cited_court": cited["court"],
-        "cited_court_display": cited["court_display"],
-        "cited_date_filed": cited["date_filed"],
-        "is_scoped": cited["cluster_id"] in SCOPED_CLUSTER_IDS,
-        "treatment": treatment,
-        "treatment_active": to_active_voice(treatment),
-        "severity": severity_for(treatment),
-        "direction": direction_for(treatment),
-        "source": edge["source"],
-        "expert_treatment": edge["expert_treatment"],
-        "expand": {
-            "quote": edge["quote"],
-            "rationale": edge["rationale"],
-            "context": find_quote_context(
-                edge["section_context"], edge["quote"]
-            ),
-        },
+        "kind": kind,
+        "acting_case": row.get("acting_case") or "",
+        "treatment": row["treatment"],
+        "treatment_past": past_tense(row["treatment"]),
+        "severity": row["severity"],
+        "direction": row["direction"],
+        "expert_treatment": row.get("expert_treatment"),
+        "source": row.get("source", "model"),
+        "evidence": row.get("evidence") or {},
     }
 
 
-def edge_to_cited_by_view(edge: dict, edge_idx: int) -> dict:
-    """For the cited side: this opinion's `cited_by[]` entry."""
-    citing = _enrich_court(OPINION_INDEX[edge["citing_cluster_id"]])
-    treatment = edge["treatment"]
+def _evidence_card(pill: JsonDict, label: str) -> JsonDict:
+    evidence = pill["evidence"]
     return {
-        "row_id": _row_id("cb", edge_idx),
-        "citing_cluster_id": citing["cluster_id"],
-        "citing_case_name": citing["case_name"],
-        "citing_docket_number": citing.get("docket_number", ""),
-        "citing_citations": citing["citations"],
-        "citing_court": citing["court"],
-        "citing_court_display": citing["court_display"],
-        "citing_date_filed": citing["date_filed"],
-        "is_scoped": citing["cluster_id"] in SCOPED_CLUSTER_IDS,
-        "treatment": treatment,
-        "severity": severity_for(treatment),
-        "direction": direction_for(treatment),
-        "source": edge["source"],
-        "expert_treatment": edge["expert_treatment"],
-        "expand": {
-            "quote": edge["quote"],
-            "rationale": edge["rationale"],
-            "context": find_quote_context(
-                edge["section_context"], edge["quote"]
-            ),
-        },
+        "label": label,
+        "severity": pill["severity"],
+        "rationale": evidence.get("rationale", ""),
+        "quote": evidence.get("quote", ""),
+        "quote_status": evidence.get("quote_status", ""),
+        "quote_names": evidence.get("quote_names", ""),
     }
 
 
-def sort_authorities(rows: list[dict]) -> list[dict]:
-    """Severity asc within tier; cited cases without dates fall to end."""
-    rows = sorted(
-        rows, key=lambda r: r.get("cited_date_filed", ""), reverse=True
-    )
-    rows = sorted(rows, key=lambda r: SEVERITY_RANK.get(r["severity"], 99))
-    return rows
+def group_cited_by(rows: list[JsonDict]) -> list[JsonDict]:
+    """One row per citing opinion, however many treatments it applied.
+
+    The row carries the treatment the citing opinion applied itself, the
+    ones it recognizes other courts applied, one evidence card per
+    negative treatment, and the worst severity of them all, which is what
+    the severity filter and the sort see.
+    """
+    grouped: dict[int, JsonDict] = {}
+    for row in rows:
+        cid = row["citing_cluster_id"]
+        head = grouped.get(cid)
+        if head is None:
+            head = grouped[cid] = {**row, "applied": [], "recognized": []}
+        kind = "recognized" if is_recognized(row["treatment"]) else "applied"
+        head[kind].append(_pill(kind, row))
+    out = []
+    for head in grouped.values():
+        by_severity = lambda p: severity_rank(p["severity"])  # noqa: E731
+        head["applied"].sort(key=by_severity)
+        head["recognized"].sort(key=by_severity)
+        pills = sorted(head["applied"] + head["recognized"], key=by_severity)
+        # the row speaks with the citing opinion's own worst treatment; a
+        # row that only reports other courts' treatments speaks with those
+        lead = (head["applied"] or head["recognized"])[0]
+        head["treatment"] = lead["treatment"]
+        head["direction"] = lead["direction"]
+        head["expert_treatment"] = lead.get("expert_treatment")
+        head["severity"] = worst_tier(p["severity"] for p in pills)
+        states = validate_pills(
+            [
+                {
+                    "kind": p["kind"],
+                    "treatment": base_treatment(p["treatment"]),
+                    "severity": p["severity"],
+                }
+                for p in pills
+            ],
+            head["expert_treatment"] or "",
+        )
+        for p, state in zip(pills, states, strict=True):
+            p["validation"] = state
+        head["validation"] = row_validation(states)
+        head["recognized_filter"] = worst_tier(
+            (p["severity"] for p in head["recognized"]), default="none"
+        )
+        # one card per pill, in the row's order: what the citing opinion
+        # did, then what it recognizes, each by severity. The card pill
+        # repeats the row pill word for word: on this tab a treatment
+        # reads from the cited case's side
+        cards = [
+            _evidence_card(p, p["treatment"])
+            for p in head["applied"] + head["recognized"]
+        ]
+        head["evidence_cards"] = [
+            c for c in cards if c["severity"] in NEGATIVE_TIERS
+        ]
+        head["has_detail"] = any(
+            c["quote"] or c["rationale"] for c in head["evidence_cards"]
+        )
+        # what the status rows quote: the leading treatment's evidence
+        head["evidence"] = cards[0] if cards else {}
+        out.append(head)
+    return out
 
 
-def sort_cited_by(rows: list[dict]) -> list[dict]:
-    """Severity asc, then date desc within tier. Adds recency_index for
-    the Cited By tab's secondary "Recency" sort."""
+def sort_cited_by(rows: list[JsonDict]) -> list[JsonDict]:
+    """DOM order: severity, then newest first. Each row also carries its
+    rank under every column the header can sort by."""
     rows = sorted(rows, key=lambda r: r["citing_date_filed"], reverse=True)
-    rows = sorted(rows, key=lambda r: SEVERITY_RANK.get(r["severity"], 99))
-    by_date_desc = sorted(
-        rows, key=lambda r: r["citing_date_filed"], reverse=True
+    rows = sorted(rows, key=lambda r: severity_rank(r["severity"]))
+    _stamp_ranks(
+        rows,
+        {
+            "severity_index": lambda r: (
+                severity_rank(r["severity"]),
+                _desc(r["citing_date_filed"]),
+            ),
+            "recency_index": lambda r: _desc(r["citing_date_filed"]),
+            "name_index": lambda r: _name_key(r["citing_case_name"]),
+            "mentions_index": lambda r: -(r.get("citing_n_mentions") or 0),
+        },
     )
-    for rank, row in enumerate(by_date_desc):
-        row["recency_index"] = rank
     return rows
 
 
-# ── Per-cluster edge expansion ─────────────────────────────────────────
-def collect_edges_per_cluster() -> tuple[
-    dict[int, list[dict]], dict[int, list[dict]]
-]:
-    """Walk EDGES once. Return (authorities_by_cluster, cited_by_by_cluster).
-
-    Authorities map: cluster_id -> list of edge views where cluster is the
-    citing side. Cited_by map: cluster_id -> list of edge views where
-    cluster is the cited side.
-    """
-    authorities: dict[int, list[dict]] = {}
-    cited_by: dict[int, list[dict]] = {}
-
-    for idx, edge in enumerate(EDGES):
-        validate_edge(edge)
-
-        citing_id = edge["citing_cluster_id"]
-        cited_id = edge["cited_cluster_id"]
-
-        # Authorities view — only emitted when citing side is scoped
-        if citing_id in SCOPED_CLUSTER_IDS:
-            authorities.setdefault(citing_id, []).append(
-                edge_to_authority_view(edge, idx)
-            )
-
-        # Cited_by view — only emitted when cited side is scoped
-        if cited_id in SCOPED_CLUSTER_IDS:
-            cited_by.setdefault(cited_id, []).append(
-                edge_to_cited_by_view(edge, idx)
-            )
-
-    return authorities, cited_by
-
-
-# ── Summary computation (FK-pointer style) ─────────────────────────────
-def _summary_pointer_from_view(view_row: dict) -> dict:
-    """Compact pointer derived from a cited_by view row — used by the
-    opinion-page summary cards. Intentionally subset of the full view row;
-    matches what `treatmentBlock` / `treatmentLine` consume."""
+def cited_by_severities(
+    cited_by_sorted: list[JsonDict],
+) -> dict[str, str | None]:
+    """The worst direct-history and citing-reference tiers among a page's
+    Cited By rows, for the home page's severity filters."""
+    direct = [r for r in cited_by_sorted if r["direction"] == "Direct History"]
+    citing = [r for r in cited_by_sorted if r["direction"] != "Direct History"]
     return {
-        "row_id": view_row["row_id"],
-        "treatment": view_row["treatment"],
-        "severity": view_row["severity"],
-        "direction": view_row["direction"],
-        "citing_cluster_id": view_row["citing_cluster_id"],
-        "citing_case_name": view_row["citing_case_name"],
-        "citing_docket_number": view_row.get("citing_docket_number", ""),
-        "citing_citations": view_row["citing_citations"],
-        "citing_court": view_row["citing_court"],
-        "citing_court_display": view_row["citing_court_display"],
-        "citing_date_filed": view_row["citing_date_filed"],
-        "is_scoped": view_row["is_scoped"],
-        "source": view_row["source"],
-        "expert_treatment": view_row["expert_treatment"],
-        "expand": view_row["expand"],
+        "dh_severity": direct[0]["severity"] if direct else None,
+        "cr_severity": citing[0]["severity"] if citing else None,
     }
 
 
-def build_summary(cited_by_sorted: list[dict]) -> dict:
-    """Compute the two FK pointers per the production CitatorClusterSummary
-    spec (FK-only flavor — no denormalized counts/dates; see db_design.md
-    § Cluster summaries).
+# ── Status rows ─────────────────────────────────────────────────────────
+def _worst_pill(row: JsonDict, directions: set[str] | None = None) -> JsonDict:
+    """The most severe pill on a row, with its own label and severity, so
+    a status row never pairs one pill's words with another's colour."""
+    pills = [
+        p
+        for p in (row.get("applied") or []) + (row.get("recognized") or [])
+        if directions is None or p.get("direction") in directions
+    ]
+    if not pills:
+        return {"treatment": row["treatment"], "severity": row["severity"]}
+    worst = min(pills, key=lambda p: severity_rank(p.get("severity")))
+    return {"treatment": worst["treatment"], "severity": worst["severity"]}
 
-    `most_severe_treatment` surfaces the most-severe non-direct cited_by
-    row when negatives exist, otherwise falls through to the most-recent
-    neutral "Cited by" — so a case that's been cited (even just neutrally)
-    shows a real treatment badge rather than a "None identified" empty
-    state. Empty state remains for the truly uncited case (issue #36).
-    """
-    citing_any = [
-        cb for cb in cited_by_sorted if cb["direction"] != "Direct History"
-    ]
-    citing_negative = [
-        cb for cb in citing_any if cb["severity"] in NEGATIVE_TIERS
-    ]
-    if citing_negative:
-        most_severe = _summary_pointer_from_view(citing_negative[0])
-    elif citing_any:
-        # No negative non-direct row; fall through to the most-recent
-        # neutral. cited_by_sorted is severity-asc-then-date-desc, so the
-        # first entry of citing_any when negatives are absent is the most
-        # recent neutral row.
-        most_severe = _summary_pointer_from_view(citing_any[0])
+
+def _passage(row: JsonDict) -> JsonDict:
+    """What a status row links to: the citing opinion's Authorities row
+    for this case, with the quote as the fallback target."""
+    evidence = row.get("evidence") or {}
+    return {
+        "quote": evidence.get("quote", ""),
+        "quote_status": evidence.get("quote_status", ""),
+        "authority_n": row.get("citing_authority_n"),
+    }
+
+
+def home_status(opinion_data: JsonDict) -> JsonDict:
+    """The "On appeal" and "Later courts" rows: what happened to the case
+    on appeal, and the worst later treatment with counts. `scope` says
+    what the counts cover: every controlling citing opinion (the anchors)
+    or only the opinions in the collection."""
+    rows = opinion_data["cited_by"]
+    direct = [r for r in rows if r["direction"] == "Direct History"]
+    later = [r for r in rows if r["direction"] != "Direct History"]
+    negative = [r for r in later if r["severity"] in NEGATIVE_TIERS]
+    populated = opinion_data.get("cited_by_populated")
+    on_appeal: JsonDict
+    if direct:
+        d = direct[0]
+        on_appeal = {
+            "state": "treated",
+            **_worst_pill(d, {"Direct History"}),
+            "citing_name": d["citing_case_name"],
+            "citing_cluster_id": d["citing_cluster_id"],
+            **_passage(d),
+        }
+    elif opinion_data["is_court_of_last_resort"]:
+        on_appeal = {"state": "not_reviewable"}
     else:
-        most_severe = None
-
-    direct = [
-        cb for cb in cited_by_sorted if cb["direction"] == "Direct History"
-    ]
-    direct_history = _summary_pointer_from_view(direct[0]) if direct else None
-
-    # `cr_severity` / `dh_severity` are the most-severe non-direct /
-    # direct-history cited_by tiers (any tier including Neutral). Used by
-    # the search-results filter rail's severity filter.
-    cr_severity = citing_any[0]["severity"] if citing_any else None
-    dh_severity = direct[0]["severity"] if direct else None
-
+        on_appeal = {"state": "none" if populated else "unknown"}
+    later_courts: JsonDict
+    if negative:
+        w = negative[0]
+        pill = _worst_pill(w)
+        later_courts = {
+            "state": "negative",
+            "treatment": pill["treatment"],
+            "severity": pill["severity"],
+            "citing_name": w["citing_case_name"],
+            "citing_cluster_id": w["citing_cluster_id"],
+            "n_other_negative": len(negative) - 1,
+            "n_plain": len(later) - len(negative),
+            "n_total": len(later),
+            **_passage(w),
+        }
+    elif later:
+        later_courts = {"state": "plain", "n_total": len(later)}
+    else:
+        later_courts = {"state": "none" if populated else "unknown"}
     return {
-        "most_severe_treatment": most_severe,
-        "direct_history": direct_history,
-        "dh_severity": dh_severity,
-        "cr_severity": cr_severity,
+        "scope": opinion_data.get("cited_by_scope", "controlling"),
+        "on_appeal": on_appeal,
+        "later_courts": later_courts,
     }
 
 
-# ── Main build ─────────────────────────────────────────────────────────
-def build_opinion(
-    opinion: dict,
-    authorities_for_cluster: list[dict],
-    cited_by_for_cluster: list[dict],
-) -> dict:
-    body_html, sections = render_body_html(opinion["document_text"])
-    authorities = sort_authorities(list(authorities_for_cluster))
-    cited_by = sort_cited_by(list(cited_by_for_cluster))
-    summary = build_summary(cited_by)
-    enriched = _enrich_court(opinion)
-    return {
-        "cluster_id": enriched["cluster_id"],
-        "case_name": enriched["case_name"],
-        "docket_number": enriched["docket_number"],
-        "citations": enriched["citations"],
-        "court": enriched["court"],
-        "court_display": enriched["court_display"],
-        "is_court_of_last_resort": opinion["court"] in COURTS_OF_LAST_RESORT,
-        "date_filed": enriched["date_filed"],
-        "excerpt": excerpt_from_text(opinion["document_text"]),
-        "summary": summary,
-        "document": {
-            "body_html": body_html,
-            "sections": sections,
-        },
-        "authorities": authorities,
-        "cited_by": cited_by,
-    }
+def docket_numbers(docket: str | None) -> list[str]:
+    """A docket field split into its numbers ("11-393, 11-398" → two
+    entries), so the templates can clamp it like a citation list."""
+    return [d.strip() for d in re.split(r"[,;]\s*", docket or "") if d.strip()]
 
 
-def build_index_entry(opinion_data: dict) -> dict:
-    return {
-        "cluster_id": opinion_data["cluster_id"],
-        "case_name": opinion_data["case_name"],
-        "docket_number": opinion_data["docket_number"],
-        "citations": opinion_data["citations"],
-        "court": opinion_data["court"],
-        "court_display": opinion_data["court_display"],
-        "is_court_of_last_resort": opinion_data["is_court_of_last_resort"],
-        "date_filed": opinion_data["date_filed"],
-        "excerpt": opinion_data["excerpt"],
-        "summary": opinion_data["summary"],
+def search_text(case_name: str, citations: list[str]) -> str:
+    """What the search box matches a card against: name and citations,
+    letters and digits only, so "103 F.3d 888" and "103f3d888" agree."""
+    joined = " ".join([case_name or ""] + list(citations or []))
+    return re.sub(r"[^a-z0-9]+", "", joined.lower())
+
+
+# ── The builder ─────────────────────────────────────────────────────────
+class SiteBuilder:
+    """Turns a DataSource into the per-opinion and site-wide JSON."""
+
+    def __init__(self, ds: DataSource) -> None:
+        self.ds = ds
+        self.index = ds.opinion_index
+        self.scoped_ids = ds.scoped_ids
+        # how many derived edges the validator dropped or flagged
+        self.edge_notes = {"temporal": 0, "hierarchy": 0}
+        self._streams: dict[int, list[list[str]]] = {}
+        self.cited_by_by_cluster = self._collect_cited_by()
+        self.history = AppellateHistory(ds, self.cited_by_by_cluster)
+
+    # ── edges → Cited By rows ────────────────────────────────────────
+    def _collect_cited_by(self) -> dict[int, list[JsonDict]]:
+        """Cited By rows per scoped cluster, from every edge. An edge the
+        dates rule out is a mis-linked citation and is dropped; a
+        court-hierarchy oddity is kept, with a note, since the citing
+        opinion's Authorities tab shows the treatment either way."""
+        cited_by: dict[int, list[JsonDict]] = {}
+        for idx, edge in enumerate(self.ds.edges):
+            try:
+                validate_edge(edge, self.index, self.ds.court_level)
+            except HierarchyError as exc:
+                if exc.kind == "temporal":
+                    self.edge_notes["temporal"] += 1
+                    continue
+                self.edge_notes["hierarchy"] += 1
+            cited = edge["cited_cluster_id"]
+            if cited in self.scoped_ids:
+                cited_by.setdefault(cited, []).append(
+                    self._cited_by_view(edge, idx)
+                )
+        return cited_by
+
+    def _streams_for(self, cluster_id: int) -> list[list[str]]:
+        """Token streams of an opinion's text, cached, for quote checks."""
+        if cluster_id not in self._streams:
+            doc = self.index[cluster_id].get("document_text")
+            self._streams[cluster_id] = (
+                document_token_streams(doc) if isinstance(doc, list) else []
+            )
+        return self._streams[cluster_id]
+
+    def _court_fields(self, record: JsonDict) -> JsonDict:
+        return {
+            **record,
+            "court_display": self.ds.court_display.get(
+                record["court"], record["court"]
+            ),
+            "court_level": self.ds.court_level.get(record["court"]),
+        }
+
+    def _cited_by_view(self, edge: JsonDict, edge_idx: int) -> JsonDict:
+        """The cited side's view of an edge. The quote is widened to its
+        sentences in the citing opinion, verified against that text and
+        checked for naming this case."""
+        citing = self._court_fields(self.index[edge["citing_cluster_id"]])
+        cited = self.index[edge["cited_cluster_id"]]
+        treatment = edge["treatment"]
+        citing_doc = citing.get("document_text")
+        quote = edge.get("quote") or ""
+        if quote and isinstance(citing_doc, list):
+            quote = expand_quote(citing_doc, quote)
+        quote_status = quote_names = ""
+        if quote:
+            quote_status = verify_quote(
+                self._streams_for(edge["citing_cluster_id"]), quote
+            )["status"]
+            quote_names = quote_names_case(
+                quote,
+                list(cited.get("citations") or []),
+                cited.get("case_name") or "",
+            )
+        rationale = edge.get("rationale") or ""
+        return {
+            "evidence": {
+                "quote": quote,
+                "rationale": rationale,
+                "quote_status": quote_status,
+                "quote_names": quote_names,
+            },
+            "has_detail": bool(quote or rationale) and treatment != "Cited by",
+            "row_id": f"cb-{edge_idx}",
+            "citing_cluster_id": citing["cluster_id"],
+            # the citing opinion's Authorities row for this case
+            "citing_authority_n": edge.get("authority_n"),
+            "citing_n_mentions": edge.get("n_mentions") or 0,
+            "acting_case": edge.get("acting_case") or "",
+            "citing_case_name": citing["case_name"],
+            "citing_docket_numbers": docket_numbers(
+                citing.get("docket_number")
+            ),
+            "citing_citations": citing["citations"],
+            "citing_court_display": citing["court_display"],
+            "citing_date_filed": citing["date_filed"],
+            "citing_date_short": short_date(citing["date_filed"]),
+            "search_text": search_text(
+                citing["case_name"], citing["citations"]
+            ),
+            "is_scoped": citing["cluster_id"] in self.scoped_ids,
+            "treatment": treatment,
+            "severity": severity_for(treatment),
+            "direction": direction_for(treatment),
+            "source": edge.get("source", "model"),
+            "expert_treatment": edge.get("expert_treatment"),
+        }
+
+    # ── Authorities rows ─────────────────────────────────────────────
+    def _authority_page_url(self, group: JsonDict) -> str:
+        """The authority's own page when the site has it, else ""."""
+        cluster_id = group.get("cited_cluster_id")
+        return (
+            f"/opinion/{cluster_id}/" if cluster_id in self.scoped_ids else ""
+        )
+
+    def _authority_row(self, group: JsonDict, document: Any) -> JsonDict:
+        """One Authorities-tab row from a citation group: the pipeline's
+        row plus what the template needs to render and sort it. Quotes are
+        widened to the sentence(s) containing them."""
+        treatment = group.get("treatment") or "Cited by"
+        # the docket number is known only for cases in the collection
+        cited = self.index.get(group.get("cited_cluster_id") or -1) or {}
+        recognized = [
+            {
+                **r,
+                "treatment_past": past_tense(r.get("treatment") or ""),
+                "treatment_recognized": recognized_form(
+                    r.get("treatment") or ""
+                ),
+                "quote": expand_quote(document, r.get("quote") or ""),
+            }
+            for r in group.get("recognized") or []
+        ]
+        recognized.sort(key=lambda x: severity_rank(x.get("severity")))
+        recognized_tiers = [x.get("severity") or "Neutral" for x in recognized]
+        applied_detail = treatment != "Cited by"
+        row = {
+            **group,
+            "treatment": treatment,
+            "is_scoped": group.get("cited_cluster_id") in self.scoped_ids,
+            "page_url": self._authority_page_url(group),
+            "docket_numbers": docket_numbers(cited.get("docket_number")),
+            "search_text": search_text(
+                group.get("name") or "",
+                list(group.get("cited_as") or [])
+                + list(group.get("citations") or []),
+            ),
+            "treatment_active": to_active_voice(treatment),
+            "quote": expand_quote(document, group.get("quote") or ""),
+            "recognized": recognized,
+            "appearance_index": group["n"] - 1,
+            "row_id": f"auth-{group['n']}",
+            # a merely-cited authority has nothing to explain; its row
+            # expands only for treatments it recognizes from other courts
+            "has_detail": bool(
+                recognized
+                or (
+                    applied_detail
+                    and (group.get("quote") or group.get("rationale"))
+                )
+            ),
+            "show_applied_detail": applied_detail,
+            "recognized_severity": worst_tier(recognized_tiers),
+            "recognized_filter": worst_tier(recognized_tiers, default="none"),
+        }
+        row["overall_severity"] = worst_tier(
+            [row.get("severity") or "Neutral", *recognized_tiers]
+        )
+        return row
+
+    def _authority_cards(
+        self, row: JsonDict, streams: list[list[str]]
+    ) -> list[JsonDict]:
+        """Evidence cards for an expanded Authorities row: this opinion's
+        own treatment first, then each treatment it recognizes, by
+        severity within each; every quote checked against the text."""
+        cards: list[JsonDict] = []
+        if row["show_applied_detail"]:
+            direct = row["treatment"] in DIRECT_HISTORY_TREATMENTS
+            cards.append(
+                {
+                    "order": 0 if direct else 1,
+                    "severity": row.get("severity") or "Neutral",
+                    "label": row["treatment_active"],
+                    "other_label": row.get("treatment_other_label") or "",
+                    "rationale": row.get("rationale") or "",
+                    "quote": row.get("quote") or "",
+                }
+            )
+        for i, x in enumerate(row["recognized"]):
+            # a recognition without its own rationale borrows the row's,
+            # which on a merely-cited row explains the recognition
+            borrowed = (
+                row.get("rationale")
+                if (i == 0 and not row["show_applied_detail"])
+                else ""
+            )
+            cards.append(
+                {
+                    "order": 2,
+                    "severity": x.get("severity") or "Neutral",
+                    "label": recognizes_label(x.get("treatment") or ""),
+                    "other_label": "",
+                    "rationale": x.get("rationale") or borrowed or "",
+                    "quote": x.get("quote") or "",
+                }
+            )
+        cards.sort(key=lambda c: (c["order"], severity_rank(c["severity"])))
+        cites = list(row.get("cited_as") or []) + list(
+            row.get("citations") or []
+        )
+        for card in cards:
+            card["quote_status"] = card["quote_names"] = ""
+            if card["quote"]:
+                card["quote_status"] = verify_quote(streams, card["quote"])[
+                    "status"
+                ]
+                card["quote_names"] = quote_names_case(
+                    card["quote"], cites, row.get("name") or ""
+                )
+        return cards
+
+    @staticmethod
+    def _validate_authority_row(row: JsonDict) -> None:
+        """Expert validation per pill: the applied pill and each recognized
+        pill carry their own mark; the row's state feeds the filter."""
+        pills = [
+            {
+                "kind": "applied",
+                "treatment": row["treatment"],
+                "severity": row.get("severity") or "Neutral",
+            }
+        ] + [
+            {
+                "kind": "recognized",
+                "treatment": x.get("treatment") or "",
+                "severity": x.get("severity") or "Neutral",
+            }
+            for x in row["recognized"]
+        ]
+        states = validate_pills(pills, row.get("expert_treatment") or "")
+        row["applied_validation"] = states[0]
+        for x, state in zip(row["recognized"], states[1:], strict=True):
+            x["validation"] = state
+        row["validation"] = row_validation(states)
+
+    def _cited_authorities(self, opinion: JsonDict) -> list[JsonDict]:
+        """The Authorities tab: one row per citation group, in DOM order
+        (this opinion's own treatment, then what it recognizes, then
+        appearance), with ranks for every other sort column."""
+        document = opinion["document_text"]
+        streams = (
+            document_token_streams(document)
+            if isinstance(document, list)
+            else []
+        )
+        # an opinion citing its own earlier decision is not an authority
+        rows = [
+            self._authority_row(g, document)
+            for g in opinion.get("citation_groups") or []
+            if g.get("cited_cluster_id") != opinion["cluster_id"]
+        ]
+        for row in rows:
+            row["evidence_cards"] = self._authority_cards(row, streams)
+            self._validate_authority_row(row)
+        rows.sort(
+            key=lambda r: (
+                severity_rank(r.get("severity")),
+                severity_rank(r["recognized_severity"]),
+                r["n"],
+            )
+        )
+        _stamp_ranks(
+            rows,
+            {
+                "severity_index": lambda r: (
+                    severity_rank(r["overall_severity"]),
+                    severity_rank(r.get("severity")),
+                    severity_rank(r["recognized_severity"]),
+                    r["n"],
+                ),
+                "date_index": lambda r: _desc(r.get("date_filed_iso") or ""),
+                "name_index": lambda r: _name_key(r["name"]),
+                "mentions_index": lambda r: -(r.get("n_mentions") or 0),
+            },
+        )
+        return rows
+
+    # ── pages ────────────────────────────────────────────────────────
+    def build_opinion(self, opinion: JsonDict) -> JsonDict:
+        """Everything one opinion page renders."""
+        cid = opinion["cluster_id"]
+        cited_authorities = self._cited_authorities(opinion)
+        # the citations in the text carry their row's severity, name and
+        # page, so the rows are built first
+        group_info = {r["n"]: r for r in cited_authorities} or None
+        body_html, sections = render_body_html(
+            opinion["document_text"], self.scoped_ids, group_info
+        )
+        cited_by = sort_cited_by(
+            group_cited_by(list(self.cited_by_by_cluster.get(cid, [])))
+        )
+        tier = opinion.get("tier", "anchor")
+        data = {
+            "cluster_id": cid,
+            "tier": tier,
+            "cl_url": CL_OPINION_URL.format(cluster_id=cid),
+            "case_name": opinion["case_name"],
+            "name_missing": opinion.get("name_missing", False),
+            "docket_number": opinion["docket_number"],
+            "docket_numbers": docket_numbers(opinion["docket_number"]),
+            "citations": opinion["citations"],
+            "court": opinion["court"],
+            "court_display": self.ds.court_display.get(
+                opinion["court"], opinion["court"]
+            ),
+            "is_court_of_last_resort": opinion["court"]
+            in self.ds.courts_of_last_resort,
+            "date_filed": opinion["date_filed"],
+            "excerpt": excerpt_from_text(opinion["document_text"]),
+            "disposition": disposition_label(opinion.get("disposition")),
+            "document": {"body_html": body_html, "sections": sections},
+            "cited_authorities": cited_authorities,
+            # whether each tab's data was collected, so an empty tab means
+            # "none" rather than "not done yet"
+            "authorities_populated": bool(opinion.get("citation_groups_meta")),
+            "cited_by_populated": tier == "anchor" or bool(cited_by),
+            # "controlling": every citing opinion from a court that binds
+            # this one; "collection": only the opinions on the site
+            "cited_by_scope": "controlling"
+            if tier == "anchor"
+            else "collection",
+            "citing_counts": opinion.get("citing_counts"),
+            "cited_by": cited_by,
+            "summary": cited_by_severities(cited_by),
+            "appellate_history": self.history.graph(cid),
+        }
+        data["status"] = home_status(data)
+        return data
+
+    @staticmethod
+    def index_entry(opinion_data: JsonDict) -> JsonDict:
+        """The home page card."""
+        return {
+            "status": opinion_data["status"],
+            "tier": opinion_data["tier"],
+            "cluster_id": opinion_data["cluster_id"],
+            "case_name": opinion_data["case_name"],
+            "search_text": search_text(
+                opinion_data["case_name"], opinion_data["citations"]
+            ),
+            "excerpt": opinion_data["excerpt"],
+            "name_missing": opinion_data["name_missing"],
+            "docket_numbers": opinion_data["docket_numbers"],
+            "citations": opinion_data["citations"],
+            "court": opinion_data["court"],
+            "court_display": opinion_data["court_display"],
+            "date_filed": opinion_data["date_filed"],
+            "disposition": opinion_data["disposition"],
+            "summary": opinion_data["summary"],
+        }
+
+
+# ── Output ──────────────────────────────────────────────────────────────
+def _write(path: Path, data: Any) -> None:
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+def scope_counts(
+    entries: list[JsonDict], pages: list[JsonDict], n_courts: int
+) -> JsonDict:
+    """What the About page says the site holds, with ready-to-print forms
+    so the template carries no number formatting."""
+    anchors = [e for e in entries if e["tier"] == "anchor"]
+    years = sorted(e["date_filed"][:4] for e in anchors if e["date_filed"])
+    scope: JsonDict = {
+        "opinions": len(entries),
+        "anchors": len(anchors),
+        "authorities": sum(1 for e in entries if e["tier"] == "authority"),
+        "citing": sum(1 for e in entries if e["tier"] == "citing"),
+        "courts": n_courts,
+        "authority_rows": sum(len(p["cited_authorities"]) for p in pages),
+        "citing_rows": sum(len(p["cited_by"]) for p in pages),
+        "citing_rows_at_anchor": sum(
+            len(p["cited_by"]) for p in pages if p["tier"] == "anchor"
+        ),
+        "anchor_earliest_year": years[0] if years else "",
+        "anchor_latest_year": years[-1] if years else "",
     }
+    for key in (
+        "opinions",
+        "authorities",
+        "citing",
+        "authority_rows",
+        "citing_rows",
+        "citing_rows_at_anchor",
+    ):
+        scope[f"{key}_display"] = f"{scope[key]:,}"
+    return scope
+
+
+def write_site(ds: DataSource, out_dir: Path = OUT_DIR) -> JsonDict:
+    """Build every page and write the `_data/` files. Returns the scope
+    counts."""
+    opinions_out = out_dir / "opinions"
+    opinions_out.mkdir(parents=True, exist_ok=True)
+    for stale in opinions_out.glob("*.json"):
+        stale.unlink()
+    builder = SiteBuilder(ds)
+    pages = []
+    entries = []
+    for opinion in ds.opinions:
+        data = builder.build_opinion(opinion)
+        _write(opinions_out / f"{data['cluster_id']}.json", data)
+        pages.append(data)
+        entries.append(builder.index_entry(data))
+    # newest first, alphabetical within a date, unnamed opinions last
+    entries.sort(key=lambda e: e["case_name"].lower())
+    entries.sort(key=lambda e: e["date_filed"] or "", reverse=True)
+    entries.sort(key=lambda e: e["name_missing"])
+    _write(out_dir / "index.json", entries)
+
+    courts = court_list(ds)
+    scope = scope_counts(entries, pages, len(courts))
+    _write(out_dir / "scope.json", scope)
+    _write(out_dir / "flags.json", FLAGS)
+    _write(out_dir / "courts.json", courts)
+    _write(
+        out_dir / "court_picker.json",
+        court_picker_tabs(ds, (c["key"] for c in courts)),
+    )
+    _write(
+        out_dir / "court_categories.json",
+        [
+            {
+                "key": cat,
+                "display": ds.category_display[cat],
+                "jurisdiction": ds.category_jurisdiction.get(cat),
+                "order": idx,
+            }
+            for idx, cat in enumerate(ds.category_order)
+            if cat in ds.category_display
+        ],
+    )
+    _write(
+        out_dir / "court_jurisdictions.json",
+        [
+            {"key": jur, "display": ds.jurisdiction_display[jur], "order": idx}
+            for idx, jur in enumerate(ds.jurisdiction_order)
+            if jur in ds.jurisdiction_display
+        ],
+    )
+    _write(out_dir / "treatments.json", treatment_table())
+
+    print(
+        f"Wrote {len(pages)} opinion pages and {len(entries)} index entries to {out_dir}"
+    )
+    print(f"Flags: {FLAGS}")
+    print(f"Validated {len(ds.edges)} edges")
+    notes = builder.edge_notes
+    if notes["temporal"] or notes["hierarchy"]:
+        print(
+            f"  {notes['temporal']} dropped (dates rule the citation out), "
+            f"{notes['hierarchy']} kept with a court-hierarchy warning"
+        )
+    return scope
 
 
 def main() -> None:
-    OPINIONS_OUT.mkdir(parents=True, exist_ok=True)
-    authorities_by_cluster, cited_by_by_cluster = collect_edges_per_cluster()
-
-    index_entries: list[dict] = []
-    for op in SCOPED_OPINIONS:
-        cid = op["cluster_id"]
-        data = build_opinion(
-            op,
-            authorities_by_cluster.get(cid, []),
-            cited_by_by_cluster.get(cid, []),
-        )
-        out_path = OPINIONS_OUT / f"{cid}.json"
-        out_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-        index_entries.append(build_index_entry(data))
-
-    index_entries.sort(key=lambda e: e["case_name"].lower())
-    index_path = OUT_DIR / "index.json"
-    index_path.write_text(
-        json.dumps(index_entries, indent=2, ensure_ascii=False)
-    )
-
-    # Emit a courts list for the search-results filter rail. Sorted by
-    # hierarchy (level 0 first), then alphabetical by display name within
-    # a level. Each entry includes a `category` for the parent-checkbox
-    # group on the filter rail. The filter rail uses this as the single
-    # source of truth for court labels — no more inline courtNames dict
-    # in index.njk.
-    courts_list = sorted(
-        (
-            {
-                "key": key,
-                "display": COURT_DISPLAY.get(key, key),
-                "level": COURT_LEVEL.get(key, 99),
-                "category": COURT_CATEGORY.get(key, "other"),
-            }
-            for key in COURT_DISPLAY
-        ),
-        key=lambda c: (c["level"], c["display"].lower()),
-    )
-    courts_path = OUT_DIR / "courts.json"
-    courts_path.write_text(
-        json.dumps(courts_list, indent=2, ensure_ascii=False)
-    )
-
-    # Court categories — each entry has a stable key + display name +
-    # jurisdiction + an order index that drives the filter rail's group
-    # order.
-    categories_list = [
-        {
-            "key": cat,
-            "display": CATEGORY_DISPLAY[cat],
-            "jurisdiction": CATEGORY_JURISDICTION.get(cat),
-            "order": idx,
-        }
-        for idx, cat in enumerate(CATEGORY_ORDER)
-        if cat in CATEGORY_DISPLAY
-    ]
-    categories_path = OUT_DIR / "court_categories.json"
-    categories_path.write_text(
-        json.dumps(categories_list, indent=2, ensure_ascii=False)
-    )
-
-    # Jurisdictions list — drives the top-level parent checkbox in the
-    # filter rail (Federal / State).
-    jurisdictions_list = [
-        {
-            "key": jur,
-            "display": JURISDICTION_DISPLAY[jur],
-            "order": idx,
-        }
-        for idx, jur in enumerate(JURISDICTION_ORDER)
-        if jur in JURISDICTION_DISPLAY
-    ]
-    jurisdictions_path = OUT_DIR / "court_jurisdictions.json"
-    jurisdictions_path.write_text(
-        json.dumps(jurisdictions_list, indent=2, ensure_ascii=False)
-    )
-
-    print(f"Wrote {len(SCOPED_OPINIONS)} opinion JSONs to {OPINIONS_OUT}")
-    print(
-        f"Wrote index.json with {len(index_entries)} entries to {index_path}"
-    )
-    print(f"Wrote courts.json with {len(courts_list)} entries")
-    print(f"Wrote court_categories.json with {len(categories_list)} entries")
-    print(
-        f"Wrote court_jurisdictions.json with {len(jurisdictions_list)} entries"
-    )
-    print(f"Validated {len(EDGES)} edges (hierarchy + temporal)")
+    write_site(load_data_source())
 
 
 if __name__ == "__main__":

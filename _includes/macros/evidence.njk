@@ -1,0 +1,48 @@
+{# One evidence card inside an expanded treatment row: the pill, the
+   rationale, the quote with its status line, and a way to the passage.
+   `card` has label, severity, rationale, quote, quote_status, quote_names
+   and optionally other_label. `where` names the text the quote comes from
+   ("the opinion" or "the citing opinion"). With `href` the passage link is
+   an anchor to another page; without it the card renders the
+   "Read in the opinion" button (opinion_tabs.readQuote); with
+   `linkable` false it renders no way to the passage. #}
+{% from "macros/treatment.njk" import severityBadge %}
+{% from "macros/icons.njk" import icon %}
+
+{% macro evidenceCard(card, where="the opinion", href="", href_label="", linkable=true) %}
+<article class="evidence-card">
+  <div class="evidence-card__head">
+    {{ severityBadge(card.severity, card.label) }}
+    {% if card.other_label %}<span class="evidence-card__other">{{ card.other_label }}</span>{% endif %}
+  </div>
+  {% if card.rationale %}<p class="evidence-card__rationale">{{ card.rationale }}</p>{% endif %}
+  {% if card.quote %}
+  <blockquote class="evidence-card__quote">
+    <p class="evidence-card__quote-text">{{ card.quote }}</p>
+    {# two checks: is the quote in the text, and does it name this case #}
+    <p class="quote-status">
+      {% if card.quote_status == "found" %}<span class="quote-status__ok">✓ In {{ where }}</span>
+      {% elif card.quote_status == "stitched" %}<span class="quote-status__ok">✓ In {{ where }}, separate passages</span>
+      {% elif card.quote_status == "partial" %}<span class="quote-status__warn">⚠ Only partly in {{ where }}</span>
+      {% elif card.quote_status == "missing" %}<span class="quote-status__bad">✗ Not found in {{ where }}</span>
+      {% else %}<span class="quote-status__muted">– Too short to check</span>{% endif %}
+      <span class="quote-status__sep" aria-hidden="true">·</span>
+      {% if card.quote_names == "cite" %}<span class="quote-status__ok">✓ Cites this case</span>
+      {% elif card.quote_names == "name" %}<span class="quote-status__ok">✓ Names this case</span>
+      {% else %}<span class="quote-status__warn">⚠ Does not name this case</span>{% endif %}
+    </p>
+    {% if href %}
+    <a href="{{ href }}" class="evidence-card__link" x-on:click.stop>
+      {{ href_label }}
+      {{ icon("arrow-right", "w-3.5 h-3.5") }}
+    </a>
+    {% elif linkable and card.quote_status != "missing" %}
+    <button type="button" class="evidence-card__link" data-quote="{{ card.quote }}" x-on:click="readQuote" aria-label="Read this passage in context in the opinion">
+      Read in the opinion
+      {{ icon("arrow-right", "w-3.5 h-3.5") }}
+    </button>
+    {% endif %}
+  </blockquote>
+  {% endif %}
+</article>
+{% endmacro %}

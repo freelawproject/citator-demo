@@ -5,9 +5,25 @@
 @layer base {
   :root {
     --content-max-width: 1200px;
+    /* the compact case bar on opinion pages; in-page jump targets clear it */
+    --case-bar-h: 2.5rem;
+    /* column tracks of the Authorities / Cited By row grid. The treatment
+       column holds the applied pill and the recognized pills, which
+       spell the whole recognized form. */
+    --row-treatment: 11.25rem;
+    --row-date: 6.5rem;
+    --row-cited: 4.5rem;
+    --row-chevron: 1rem;
+  }
+  html {
+    scroll-behavior: smooth;
   }
   body {
     @apply font-sans text-greyscale-900 bg-greyscale-25;
+  }
+  /* the page behind an open dialog does not scroll */
+  body.is-modal-open {
+    @apply overflow-hidden;
   }
   h1 {
     @apply font-cooper text-display-sm font-semibold md:text-display-lg;
@@ -27,50 +43,176 @@
   ol {
     @apply list-decimal pl-6;
   }
-  table {
-    @apply table;
-  }
-  tr {
-    @apply has-[th[scope="col"]]:bg-greyscale-100 w-full border-b border-greyscale-200 text-sm font-normal;
-  }
-  th {
-    @apply p-2 text-start text-greyscale-700 font-normal;
-  }
-  td {
-    @apply p-2;
-  }
   [x-cloak] {
     display: none !important;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    .case-bar,
+    .expand-chevron,
+    .citator-row__chevron {
+      transition: none;
+    }
+    .quote-flash,
+    .mention-flash .cited-case,
+    .row-flash {
+      animation: none;
+    }
   }
 }
 
 @tailwind components;
 
 @layer components {
-  .alert {
-    @apply px-4 py-3 text-sm rounded-[10px] border;
+  /* ── Site chrome ─────────────────────────────────────────────────── */
+  .site-header {
+    @apply w-full border-b border-greyscale-200 bg-greyscale-50;
   }
-  .alert-warning {
-    @apply alert text-greyscale-950 bg-yellow-50 border-amber-450 border-2 rounded-2xl;
+  .site-header__wordmark {
+    @apply inline-flex items-center font-cooper text-lg font-semibold text-primary-700 no-underline transition hover:text-primary-900;
   }
-  .btn {
-    @apply py-2.5 px-3.5 rounded-lg w-fit text-sm font-normal flex gap-1 items-center;
+  .site-header__link {
+    @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-greyscale-700 no-underline transition hover:bg-primary-50 hover:text-primary-700;
   }
-  .btn-primary {
-    @apply btn text-white bg-primary-600 hover:bg-primary-700 outline-none focus-visible:ring-4 focus-visible:ring-primary-300;
+  .site-header__cta {
+    @apply inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white no-underline transition hover:bg-primary-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300;
   }
-  .btn-outline {
-    @apply btn bg-white text-greyscale-700 hover:bg-greyscale-400 hover:text-white border border-greyscale-300 focus-visible:ring-4 focus-visible:ring-greyscale-300;
-  }
-  .btn-ghost {
-    @apply btn hover:bg-greyscale-100 focus-visible:ring-4 focus-visible:ring-greyscale-200;
-  }
-  .links {
-    @apply underline text-primary-600 hover:text-primary-800;
+  .site-footer {
+    @apply w-full border-t border-greyscale-200 bg-greyscale-50 text-xs text-greyscale-500;
   }
   .skip-link {
     @apply transition-[opacity,transform] ease-in-out pointer-events-none focus-visible:pointer-events-auto top-0 left-0 bg-primary-600 text-white absolute p-2 m-2 -translate-y-24 focus-visible:translate-y-0 focus-visible:opacity-100 opacity-0 focus-visible:ring focus-visible:ring-primary-900 focus-visible:outline focus-visible:outline-primary-900 z-50;
   }
+  .links {
+    @apply underline text-primary-600 hover:text-primary-800;
+  }
+  .checkbox {
+    @apply rounded border-greyscale-300 text-primary-600 focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-wide text-greyscale-500;
+  }
+  .back-nav-row {
+    @apply mb-6;
+  }
+  .back-nav {
+    @apply inline-flex items-center gap-1 rounded-md border border-greyscale-300 bg-white px-2.5 py-1 text-sm font-medium text-greyscale-700 no-underline transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  /* a chevron that turns when its <details> opens */
+  .expand-chevron {
+    @apply transition-transform;
+  }
+  details[open] > summary .expand-chevron {
+    transform: rotate(90deg);
+  }
+  /* <summary> without the default marker */
+  .disposition__summary,
+  .history-node__meta-summary,
+  .treatment-expand__summary,
+  .authority-row__summary,
+  .list-filter__summary {
+    list-style: none;
+  }
+  .disposition__summary::-webkit-details-marker,
+  .history-node__meta-summary::-webkit-details-marker,
+  .treatment-expand__summary::-webkit-details-marker,
+  .authority-row__summary::-webkit-details-marker,
+  .list-filter__summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* ── Metadata lists (court, date, docket, citations) ─────────────── */
+  .meta-list {
+    @apply m-0 flex flex-wrap gap-x-6 gap-y-1 text-xs;
+  }
+  .meta-list > div {
+    @apply inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-1;
+  }
+  .meta-list dt {
+    @apply text-xs font-semibold uppercase tracking-wide text-greyscale-500;
+  }
+  /* a value flows as text, so a "+N" chip follows the last entry on the
+     same line; the home card keeps its value to one line instead */
+  .meta-list dd {
+    @apply m-0 min-w-0 text-greyscale-700;
+  }
+  .home-meta dd {
+    @apply flex items-baseline gap-x-1;
+  }
+  .meta-list--compact {
+    @apply mt-1.5 grid gap-y-1 text-[0.6875rem] leading-snug;
+  }
+  .meta-list--compact dt {
+    @apply text-[0.625rem];
+  }
+
+  /* a citation list: the first entries show, "+N" reveals the rest. On
+     the home cards the list keeps to one line until expanded; in the tabs
+     it wraps, so a long citation is never cut off. */
+  .cite-list {
+    @apply min-w-0;
+  }
+  .home-meta .cite-list {
+    @apply truncate;
+  }
+  .home-meta .is-expanded > .cite-list {
+    @apply overflow-visible whitespace-normal;
+  }
+  .cite-extra {
+    display: none;
+  }
+  .is-expanded .cite-extra {
+    display: inline;
+  }
+  .cite-list__dot {
+    @apply text-greyscale-400;
+  }
+  .cite-list__more {
+    @apply relative z-10 ml-1 inline-flex shrink-0 items-center justify-center rounded-full bg-greyscale-100 px-1.5 py-0.5 align-baseline text-[0.625rem] font-semibold leading-none text-greyscale-600 transition hover:bg-greyscale-200 hover:text-greyscale-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+
+  /* ── Treatment pills and validation marks ────────────────────────── */
+  /* one size everywhere: the compact pill of the home cards */
+  .severity-badge {
+    @apply inline-flex min-w-0 max-w-full items-center gap-1 rounded-full px-2 py-0 text-xs font-semibold uppercase tracking-wide;
+  }
+  .severity-badge__icon {
+    @apply h-3 w-3 flex-shrink-0;
+  }
+  .severity-badge__label {
+    @apply truncate;
+  }
+  .severity-badge--stop {
+    @apply bg-red-500/10 text-red-700;
+  }
+  .severity-badge--warning {
+    @apply bg-orange-500/10 text-orange-700;
+  }
+  .severity-badge--caution {
+    @apply bg-amber-500/15 text-amber-700;
+  }
+  .severity-badge--neutral {
+    @apply bg-greyscale-200 text-greyscale-700;
+  }
+  .severity-badge--affirmed {
+    @apply bg-green-500/10 text-green-700;
+  }
+  /* the filter menus' size: the same 10px as their section headings */
+  .severity-badge--small {
+    @apply px-1.5 text-[0.625rem] leading-4;
+  }
+  .severity-badge--small .severity-badge__icon {
+    @apply h-2.5 w-2.5;
+  }
+  .validation-dot {
+    @apply -m-1 p-1 align-middle;
+  }
+  .validation-dot__icon {
+    @apply h-4 w-4 flex-shrink-0;
+  }
+  /* a tooltip from the data-tooltip attribute, on hover and on focus */
   .tooltip-target {
     @apply relative inline-flex items-center justify-center;
   }
@@ -79,13 +221,12 @@
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
-    left: auto;
     padding: 6px 10px;
     background: theme('colors.greyscale.900');
     color: white;
     font-size: 12px;
     line-height: 16px;
-    white-space: pre-wrap;
+    white-space: pre-line;
     max-width: 280px;
     width: max-content;
     text-align: left;
@@ -96,86 +237,1013 @@
     transition: opacity 100ms ease;
     z-index: 20;
   }
-  .tooltip-target--right::after {
-    right: auto;
-    left: 100%;
-  }
   .tooltip-target:hover::after,
   .tooltip-target:focus-visible::after {
     opacity: 1;
   }
-  .tooltip-host:hover .rich-tooltip,
-  .tooltip-host:focus-visible .rich-tooltip,
-  .tooltip-host:focus-within .rich-tooltip {
-    opacity: 1;
-    visibility: visible;
+
+  /* ── Home page ───────────────────────────────────────────────────── */
+  .filter-group {
+    @apply mt-3 border-t border-greyscale-200 pt-5;
   }
+  .filter-group__title {
+    @apply block text-xs font-bold uppercase tracking-wider text-greyscale-800;
+  }
+  /* severity filter: one row of round icon toggles per question, most
+     severe on the left; a selected toggle carries a dark ring */
+  .sev-grid {
+    @apply grid grid-cols-5 gap-x-1;
+  }
+  .sev-group {
+    @apply mt-2.5;
+  }
+  .sev-group__title {
+    @apply m-0 mb-1 text-[0.625rem] font-semibold uppercase tracking-wide text-greyscale-500;
+  }
+  .sev-toggle {
+    @apply mx-auto flex h-6 w-6 items-center justify-center rounded-full border-2 border-transparent p-0 transition hover:border-greyscale-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .sev-toggle.is-on {
+    @apply border-greyscale-800;
+  }
+  .sev-toggle__icon {
+    @apply h-3.5 w-3.5;
+  }
+  .sev-toggle--stop {
+    @apply bg-red-500/10 text-red-700;
+  }
+  .sev-toggle--warning {
+    @apply bg-orange-500/10 text-orange-700;
+  }
+  .sev-toggle--caution {
+    @apply bg-amber-500/15 text-amber-700;
+  }
+  .sev-toggle--neutral {
+    @apply bg-greyscale-200 text-greyscale-700;
+  }
+  .sev-toggle--positive {
+    @apply bg-green-500/10 text-green-700;
+  }
+  .severity-clear {
+    @apply mt-3 rounded text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .search-box {
+    @apply block w-full rounded-lg border border-greyscale-300 bg-white py-2.5 pl-10 pr-3 text-sm text-greyscale-900 placeholder:text-greyscale-400 focus:border-primary-500 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300;
+  }
+  .search-box--plain {
+    @apply px-3 py-2;
+  }
+  .search-box__icon {
+    @apply pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-greyscale-400;
+  }
+  .home-list {
+    @apply m-0 flex list-none flex-col gap-2.5 pl-0;
+  }
+  /* the whole card is one click target: the name's link is stretched
+     over it; the links in the status rows sit on top (z-10) */
+  .home-row {
+    @apply relative rounded-xl border border-greyscale-200 bg-white px-5 py-3.5 transition-shadow hover:shadow-sm;
+  }
+  .home-row:focus-within {
+    @apply border-primary-300;
+  }
+  .home-card {
+    @apply flex flex-col gap-1;
+  }
+  .home-card__link {
+    @apply text-greyscale-900 no-underline hover:text-primary-700 hover:underline;
+  }
+  .home-card__link::after {
+    @apply absolute inset-0;
+    content: "";
+  }
+  .home-card__anchor {
+    @apply ml-2 inline-block rounded-full border border-primary-200 bg-primary-50 px-2 py-px align-middle text-[0.6875rem] font-semibold uppercase tracking-wide text-primary-800;
+  }
+  .home-meta {
+    @apply mt-1 gap-y-0.5;
+  }
+  .home-snippet {
+    @apply m-0 mt-1 border-l-2 border-greyscale-200 pl-3 text-xs italic leading-relaxed text-greyscale-500;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .home-pager {
+    @apply mt-6 flex items-center justify-center gap-4;
+  }
+  .home-pager__btn {
+    @apply rounded-md border border-greyscale-300 bg-white px-3 py-1.5 text-sm font-medium text-greyscale-700 hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 disabled:cursor-default disabled:opacity-40 disabled:hover:border-greyscale-300 disabled:hover:bg-white disabled:hover:text-greyscale-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .home-pager__label {
+    @apply text-sm tabular-nums text-greyscale-600;
+  }
+
+  /* the Disposition / On appeal / Later courts rows */
+  .home-status {
+    @apply m-0 grid items-baseline gap-x-4 gap-y-0.5 border-y border-greyscale-100 py-2 text-sm;
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+  .home-status dt {
+    @apply text-xs font-semibold uppercase tracking-wide text-greyscale-500;
+  }
+  .home-status dd {
+    @apply m-0 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5;
+  }
+  .home-status__text {
+    @apply text-xs text-greyscale-700;
+  }
+  .home-status__muted {
+    @apply text-xs text-greyscale-500;
+  }
+  .home-status__sep {
+    @apply text-greyscale-400;
+  }
+  .home-status__action {
+    @apply relative z-10 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .home-status__name {
+    @apply font-semibold text-greyscale-900;
+  }
+  .home-status__action:hover .home-status__name {
+    @apply text-primary-700 underline;
+  }
+  .opinion-status {
+    @apply mt-5 border-t border-greyscale-200 pt-4;
+  }
+  /* an "Other" disposition keeps the court's sentence behind its pill */
+  .disposition {
+    @apply relative z-10 min-w-0;
+  }
+  .disposition__summary {
+    @apply inline-flex cursor-pointer items-center gap-1.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .disposition__text {
+    @apply m-0 mt-1.5 text-xs text-greyscale-500;
+  }
+
+  /* court picker */
+  .court-open {
+    @apply mt-2 flex w-full items-center justify-between gap-2 rounded-lg border border-greyscale-300 bg-white px-3 py-2 text-left text-sm font-medium text-greyscale-800 hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .court-chips {
+    @apply mt-2 flex flex-wrap gap-1.5;
+  }
+  .court-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-greyscale-200 bg-greyscale-50 px-2 py-0.5 text-xs text-greyscale-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .court-chip__x {
+    @apply text-greyscale-400;
+  }
+  .court-chip:hover .court-chip__x {
+    @apply text-red-600;
+  }
+  .court-chips__clear {
+    @apply rounded text-xs font-semibold text-primary-600 hover:text-primary-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .court-modal {
+    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+  }
+  .court-modal__backdrop {
+    @apply absolute inset-0 bg-greyscale-900/40;
+  }
+  .court-modal__dialog {
+    @apply relative flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-greyscale-200 bg-white shadow-xl;
+  }
+  .court-modal__head {
+    @apply flex items-center justify-between gap-4 border-b border-greyscale-200 px-5 py-4;
+  }
+  .court-modal__close {
+    @apply rounded-md p-1 text-greyscale-500 hover:bg-greyscale-100 hover:text-greyscale-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .court-modal__tools {
+    @apply flex flex-col gap-3 px-5 pt-4 sm:flex-row sm:items-center;
+  }
+  .court-modal__btns {
+    @apply flex flex-wrap gap-1.5;
+  }
+  .court-btn {
+    @apply rounded-md border border-greyscale-300 bg-white px-2.5 py-1.5 text-xs font-medium text-greyscale-700 hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .court-modal__tabs {
+    @apply mt-4 flex gap-1 overflow-x-auto border-b border-greyscale-200 px-5;
+  }
+  .court-tab {
+    @apply -mb-px flex shrink-0 items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-sm font-medium text-greyscale-600 hover:border-greyscale-300 hover:text-greyscale-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .court-tab.is-active {
+    @apply border-primary-600 text-primary-700;
+  }
+  .court-tab__count {
+    @apply rounded-full bg-greyscale-100 px-1.5 text-[0.6875rem] tabular-nums text-greyscale-600;
+  }
+  .court-modal__body {
+    @apply flex-1 overflow-y-auto px-5 py-4;
+  }
+  .court-cols {
+    @apply gap-x-8 sm:columns-2 lg:columns-3;
+  }
+  .court-group {
+    @apply mb-5 break-inside-avoid;
+  }
+  .court-group__head {
+    @apply flex items-center gap-2 text-sm font-semibold text-greyscale-900;
+  }
+  .court-group__list {
+    @apply m-0 mt-1 list-none pl-0;
+  }
+  .court-option {
+    @apply flex items-start gap-2 py-0.5 text-sm text-greyscale-700 hover:text-greyscale-900;
+  }
+  /* indent by rank within the state: highest court flush, then down */
+  .court-option--d1 {
+    @apply pl-4;
+  }
+  .court-option--d2 {
+    @apply pl-8;
+  }
+  .court-option--d3 {
+    @apply pl-12;
+  }
+  .court-empty {
+    @apply m-0 text-sm text-greyscale-500;
+  }
+  .court-modal__foot {
+    @apply flex items-center justify-between gap-4 border-t border-greyscale-200 px-5 py-3;
+  }
+  .court-done {
+    @apply rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+
+  /* ── Opinion page ────────────────────────────────────────────────── */
+  /* two columns: the "Jump to" list beside the whole page, sticky on
+     wide screens; a compact row above the caption on narrow ones */
+  .opinion-page {
+    @apply grid gap-y-6 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-x-0;
+  }
+  .opinion-sidebar {
+    @apply lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto lg:pr-6;
+  }
+  /* the rule lives on the main column so it runs the full page height */
+  .opinion-main {
+    @apply min-w-0 lg:border-l lg:border-greyscale-200 lg:pl-10;
+  }
+  .opinion-card {
+    @apply rounded-2xl border border-greyscale-200 bg-greyscale-50 px-5 py-5 md:px-7 md:py-6;
+  }
+  .jump-links__title {
+    @apply mb-2 text-xs font-semibold uppercase tracking-wide text-greyscale-500 lg:mb-2.5;
+  }
+  .jump-links ul {
+    @apply m-0 flex list-none flex-wrap gap-x-1 gap-y-1 p-0 lg:flex-col lg:gap-y-0.5 lg:border-l-2 lg:border-greyscale-200;
+  }
+  .jump-links__link {
+    @apply block rounded-md px-2.5 py-1 text-sm font-medium text-greyscale-700 no-underline hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300
+      lg:-ml-0.5 lg:rounded-l-none lg:border-l-2 lg:border-transparent lg:px-3 lg:py-1.5 lg:leading-snug lg:hover:border-primary-500;
+  }
+  /* sticky, zero-height anchor so the case bar overlays the column
+     without taking space; the bar fades in once the card scrolls past */
+  .case-bar-anchor {
+    @apply sticky top-0 z-20 h-0;
+  }
+  .case-bar {
+    @apply pointer-events-none absolute inset-x-0 top-0 flex -translate-y-1 items-center gap-3 rounded-b-lg bg-greyscale-900 px-4 opacity-0 shadow-md;
+    height: var(--case-bar-h);
+    transition: opacity 150ms ease-out, transform 150ms ease-out;
+  }
+  .case-bar--visible {
+    @apply pointer-events-auto translate-y-0 opacity-100;
+  }
+  .case-bar__name {
+    @apply min-w-0 truncate font-cooper text-base font-semibold text-white no-underline hover:text-primary-200 hover:underline;
+  }
+  .case-bar__meta {
+    @apply hidden shrink-0 text-xs text-greyscale-300 sm:inline;
+  }
+  .case-bar__dot {
+    @apply text-greyscale-500;
+  }
+  /* every in-page jump target clears the case bar */
+  .opinion-body section,
+  .opinion-body [id],
+  #treatment-summary,
+  #panel-opinion,
+  #panel-authorities [id^="authority-"] {
+    scroll-margin-top: calc(var(--case-bar-h) + 1rem);
+  }
+  .tab-bar {
+    @apply mt-8 flex gap-2 border-b border-greyscale-200;
+  }
+  .tab-bar__tab {
+    @apply -mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:rounded-t focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .tab-count {
+    @apply ml-1 inline-flex min-w-[1.375rem] items-center justify-center rounded-full bg-greyscale-100 px-1.5 py-px text-[0.6875rem] font-semibold leading-4 tabular-nums text-greyscale-600;
+  }
+  .tab-count--active {
+    @apply bg-primary-50 text-primary-700;
+  }
+  .tab-note {
+    @apply mt-2 mb-5 text-xs text-greyscale-500;
+  }
+  .tab-note--end {
+    @apply text-right;
+  }
+  /* sort dropdown and filter menu on the left, "N of M" on the right */
+  .list-toolbar {
+    @apply mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2;
+  }
+  .list-toolbar__controls {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-2;
+  }
+  .tab-note + .list-toolbar {
+    @apply -mt-2;
+  }
+  .list-search {
+    @apply relative block;
+  }
+  .list-search__icon {
+    @apply pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-greyscale-400;
+  }
+  .list-search__input {
+    @apply block w-56 rounded-md border border-greyscale-300 bg-white py-1 pl-7 pr-2 text-xs text-greyscale-800 placeholder:text-greyscale-400 focus:border-primary-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .sort-select {
+    @apply inline-flex items-center gap-2 text-xs text-greyscale-600;
+  }
+  .sort-select__label {
+    @apply font-semibold uppercase tracking-wide text-greyscale-500;
+  }
+  .sort-select__input {
+    @apply rounded-md border border-greyscale-300 bg-white py-1 pl-2 pr-7 text-xs text-greyscale-800 focus:border-primary-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .list-count {
+    @apply m-0 text-xs text-greyscale-500;
+  }
+  .tab-empty {
+    @apply m-0 rounded-2xl border border-greyscale-200 bg-white px-5 py-4 text-sm text-greyscale-600;
+  }
+  .back-to-top {
+    @apply fixed bottom-5 right-5 z-20 inline-flex items-center gap-1.5 rounded-full border border-greyscale-300 bg-white px-3.5 py-2 text-sm font-medium text-greyscale-700 no-underline shadow-sm hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300;
+  }
+
+  /* occurrence navigator, fixed at the bottom while stepping through a
+     citation's mentions */
+  .occ-nav {
+    @apply fixed bottom-5 left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center gap-x-4 gap-y-2 rounded-full border border-greyscale-300 bg-white py-2 pl-4 pr-2 text-sm shadow-lg;
+    max-width: calc(100vw - 2rem);
+  }
+  .occ-nav__text {
+    @apply flex min-w-0 items-center gap-x-2;
+  }
+  .occ-nav__name {
+    @apply max-w-[16rem] truncate font-semibold text-greyscale-900 no-underline;
+  }
+  a.occ-nav__name {
+    @apply hover:text-primary-700 hover:underline;
+  }
+  .occ-nav__count {
+    @apply whitespace-nowrap text-xs text-greyscale-600;
+  }
+  .occ-nav__buttons {
+    @apply flex items-center gap-1;
+  }
+  .occ-nav__btn {
+    @apply inline-flex items-center gap-1 rounded-full border border-greyscale-300 bg-white px-3 py-1 text-xs font-medium text-greyscale-700 hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .occ-nav__btn--row {
+    @apply border-primary-600 bg-primary-600 text-white hover:border-primary-700 hover:bg-primary-700 hover:text-white;
+  }
+  .occ-nav__close {
+    @apply ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-greyscale-500 hover:bg-greyscale-100 hover:text-greyscale-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+
+  /* ── Opinion text ────────────────────────────────────────────────── */
   .opinion-body section {
     @apply mb-6 rounded-lg;
   }
-  .opinion-body section.section-flash {
-    animation: quote-flash-fade 3.5s ease-out;
+  /* writing titles show only when a cluster has several writings; the
+     fixtures' I/II/III section labels stay hidden */
+  .opinion-body section h2 {
+    @apply mt-10 mb-5 border-b border-greyscale-200 pb-2 font-cooper text-xl font-semibold text-greyscale-900;
   }
-  .opinion-body p.quote-flash {
-    animation: quote-flash-fade 3.5s ease-out;
+  .opinion-body section:first-child h2 {
+    @apply mt-2;
   }
-  .opinion-body span.quote-flash {
-    animation: quote-flash-inline 3.5s ease-out;
+  .opinion-body section[data-section-id="I"] h2,
+  .opinion-body section[data-section-id="II"] h2,
+  .opinion-body section[data-section-id="III"] h2 {
+    @apply sr-only;
+  }
+  .opinion-body p {
+    @apply mb-4 text-base leading-relaxed text-greyscale-800;
+  }
+  .opinion-body .opinion-author {
+    @apply font-semibold text-greyscale-900;
+  }
+  .opinion-body .opinion-judges,
+  .opinion-body .opinion-attorneys {
+    @apply text-sm text-greyscale-600;
+  }
+  .opinion-body h3.opinion-heading {
+    @apply mt-8 mb-3 text-sm font-semibold uppercase tracking-wide text-greyscale-700;
+  }
+  .opinion-body blockquote {
+    @apply my-5 ml-0 border-l-2 border-greyscale-300 pl-5 text-greyscale-700;
+  }
+  .opinion-body blockquote + blockquote {
+    @apply -mt-4;
+  }
+  .opinion-body sup.fnref {
+    @apply ml-px align-super text-xs font-semibold leading-none;
+  }
+  .opinion-body sup.fnref a {
+    @apply rounded px-0.5 text-primary-700 no-underline hover:bg-primary-50 hover:underline;
+  }
+  .opinion-body .opinion-footnotes {
+    @apply mt-10 border-t border-greyscale-200 pt-5;
+  }
+  .opinion-body .opinion-footnotes h3.opinion-heading--notes {
+    @apply mt-0 mb-4;
+  }
+  .opinion-body .opinion-footnotes ol {
+    @apply m-0 list-none pl-0;
+  }
+  .opinion-body .opinion-footnotes li {
+    @apply -mx-2 mb-3 grid grid-cols-[2.25rem_minmax(0,1fr)] gap-x-2 rounded-md px-2 py-1;
+  }
+  .opinion-body .fn-label {
+    @apply pr-1 pt-px text-right text-sm font-semibold text-greyscale-500;
+  }
+  .opinion-body .fn-label__link {
+    @apply text-primary-700 no-underline hover:underline;
+  }
+  .opinion-body .fn-body p {
+    @apply mb-2 text-sm leading-relaxed text-greyscale-700;
+  }
+  .opinion-body .fn-body p:last-child {
+    @apply mb-0;
+  }
+  /* cited cases sit on a light brand tint; a case with a negative
+     treatment carries a small marker in the colour of the most serious
+     treatment on its Authorities row */
+  .opinion-body .cited-case {
+    @apply inline rounded-sm bg-primary-50 px-1 py-px italic text-greyscale-900;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .opinion-body .cited-case-wrap {
+    @apply inline whitespace-nowrap;
+  }
+  .opinion-body .cited-case__severity {
+    @apply ml-0.5 inline-block h-2 w-2 rounded-full align-middle;
+  }
+  .opinion-body .cited-case__severity--stop {
+    @apply bg-red-500;
+  }
+  .opinion-body .cited-case__severity--warning {
+    @apply bg-orange-500;
+  }
+  .opinion-body .cited-case__severity--caution {
+    @apply bg-amber-500;
+  }
+  /* every citation is a link (to its Authorities row, or to the case's
+     page), so the whole chip gets the hover: a neutral darkening, since a
+     red tint would read as a negative treatment */
+  .opinion-body a.cited-case,
+  .opinion-body a.cited-case-wrap {
+    @apply text-greyscale-900 no-underline;
+  }
+  .opinion-body a.cited-case:hover,
+  .opinion-body a.cited-case-wrap:hover .cited-case {
+    @apply bg-greyscale-200;
+  }
+  .opinion-body a.cited-case-wrap:focus-visible {
+    @apply rounded-sm outline-none ring-2 ring-primary-300;
+  }
+  /* landing highlights (a quote lookup, a citation's mention, an
+     Authorities row): a neutral grey, so they never read as a treatment */
+  .opinion-body .quote-flash {
+    animation: quote-flash-fade 3.5s ease-out;
     border-radius: 3px;
     padding: 0 2px;
     margin: 0 -2px;
   }
+  .mention-flash .cited-case {
+    animation: mention-flash-fade 2.8s ease-out;
+  }
+  .row-flash {
+    animation: row-flash-fade 2.8s ease-out;
+  }
   @keyframes quote-flash-fade {
     0%, 60% {
-      background-color: rgb(254 240 138 / 0.6);
-      box-shadow: 0 0 0 6px rgb(254 240 138 / 0.6);
-      border-radius: 6px;
-    }
-    100% {
-      background-color: transparent;
-      box-shadow: 0 0 0 6px transparent;
-      border-radius: 6px;
-    }
-  }
-  @keyframes quote-flash-inline {
-    0%, 60% {
-      background-color: rgb(254 240 138 / 0.85);
-      box-shadow: 0 0 0 2px rgb(254 240 138 / 0.85);
+      background-color: theme('colors.greyscale.200');
+      box-shadow: 0 0 0 2px theme('colors.greyscale.200');
     }
     100% {
       background-color: transparent;
       box-shadow: 0 0 0 2px transparent;
     }
   }
-  .opinion-body section h2 {
-    @apply sr-only;
+  @keyframes mention-flash-fade {
+    0%, 45% {
+      background-color: theme('colors.greyscale.200');
+      box-shadow: 0 0 0 4px theme('colors.greyscale.200');
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: 0 0 0 4px transparent;
+    }
   }
-  .opinion-body p {
-    @apply text-base text-greyscale-800 leading-relaxed mb-4;
+  @keyframes row-flash-fade {
+    0%, 45% {
+      background-color: theme('colors.greyscale.200');
+      box-shadow: inset 4px 0 0 theme('colors.greyscale.500');
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: inset 4px 0 0 transparent;
+    }
   }
-  .opinion-body .cited-case--scoped {
-    @apply text-primary-600 italic underline hover:text-primary-700;
+
+  /* ── Treatment lists (Authorities, Cited By) ─────────────────────── */
+  /* rows and the header share one grid, so the columns line up down the
+     list and across the two tabs whether or not a row fills a column */
+  .citator-row {
+    @apply grid items-start gap-x-3 px-5 py-3;
+    grid-template-columns:
+      var(--row-treatment) minmax(0, 1fr)
+      var(--row-date) var(--row-cited) var(--row-chevron);
   }
-  .opinion-body .cited-case:not(.cited-case--scoped) {
-    @apply text-greyscale-700 italic;
+  /* the validation marks sit beside each pill and need the room */
+  .citator-row--validation {
+    --row-treatment: 12.375rem;
   }
-  .treatment-expand > summary {
-    list-style: none;
+  .citator-row--head {
+    @apply items-center rounded-t-2xl border border-greyscale-200 bg-greyscale-50 py-2 text-[0.625rem] font-semibold uppercase tracking-wide text-greyscale-500;
+    /* the rows carry a 4px rail; the header keeps its columns over theirs */
+    border-left-width: 4px;
+    border-left-color: transparent;
   }
-  .treatment-expand > summary::-webkit-details-marker {
-    display: none;
+  .citator-row__date,
+  .citator-row__cited,
+  .col-head--pad {
+    @apply pl-4;
   }
-  .treatment-expand[open] > summary .expand-chevron {
-    transform: rotate(90deg);
+  .citator-row__date,
+  .citator-row__cited {
+    @apply pt-0.5 text-xs tabular-nums text-greyscale-600;
   }
-  .authority-row > summary {
-    list-style: none;
+  /* the applied pill first, then the recognized pills, stacked */
+  .citator-row__treatment {
+    @apply flex flex-col items-start gap-y-1 pt-0.5;
   }
-  .authority-row > summary::-webkit-details-marker {
-    display: none;
+  .citator-row__treatment > span {
+    @apply inline-flex max-w-full items-center gap-x-1.5;
   }
-  .authority-row[open] > summary .expand-chevron {
-    transform: rotate(90deg);
+  .citator-row__treatment .severity-badge {
+    @apply max-w-[11rem] justify-start;
+  }
+  .citator-row__name {
+    @apply min-w-0 pt-0.5 text-sm;
+  }
+  .citator-row__link {
+    @apply font-semibold text-greyscale-900 hover:text-primary-700 hover:underline;
+  }
+  .citator-row__meta {
+    @apply m-0 mt-0.5 text-xs text-greyscale-600;
+  }
+  .citator-row__chevron {
+    @apply mt-1 h-4 w-4 text-greyscale-400;
+  }
+  .citator-list {
+    @apply m-0 flex list-none flex-col rounded-b-2xl border border-t-0 border-greyscale-200 bg-white pl-0;
+  }
+  .cited-authority {
+    @apply border-b border-b-greyscale-200 last:border-b-0;
+  }
+  /* the rail: the most serious treatment on the row, which is what the
+     Treatment column sorts by */
+  .sev-rail {
+    @apply border-l-4 border-l-greyscale-200;
+  }
+  .sev-rail--stop {
+    @apply border-l-red-500;
+  }
+  .sev-rail--warning {
+    @apply border-l-orange-500;
+  }
+  .sev-rail--caution {
+    @apply border-l-amber-500;
+  }
+  .sev-rail--positive {
+    @apply border-l-green-500;
+  }
+  .authority-row__summary {
+    @apply cursor-pointer hover:bg-greyscale-50 focus-visible:bg-greyscale-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-300;
+  }
+  /* an open row and its expansion read as one panel against the list */
+  .authority-row[open] > .authority-row__summary {
+    @apply bg-greyscale-50;
+  }
+  .cited-authority:last-child > details > summary,
+  .cited-authority:last-child > div:first-child,
+  .cited-authority:last-child .authority-detail {
+    @apply rounded-b-2xl;
+  }
+  .cited-authority:last-child > details[open] > summary {
+    @apply rounded-b-none;
+  }
+  /* rows share a minimum height: title, subtitle and two meta rows */
+  .cited-authority__body {
+    @apply min-w-0;
+    min-height: 5.75rem;
+  }
+  .cited-authority__meta {
+    @apply mt-1.5 grid gap-x-3 gap-y-0.5 text-xs;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+  }
+  .cited-authority__meta dt {
+    @apply whitespace-nowrap text-greyscale-500;
+  }
+  .cited-authority__meta dd {
+    @apply m-0 min-w-0 leading-relaxed text-greyscale-700;
+  }
+  /* a filtered-out row: a class, not x-show, because the row also binds a
+     style for sorting and Alpine's style bookkeeping would undo x-show */
+  .row-hidden {
+    display: none !important;
+  }
+
+  /* column headers */
+  .col-head {
+    @apply relative flex items-center gap-1;
+  }
+  /* the filter menu: a dropdown of checkboxes in sections */
+  .list-filter {
+    @apply relative text-xs;
+  }
+  .list-filter__summary {
+    @apply inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-greyscale-300 bg-white px-2.5 py-1 font-medium text-greyscale-700 hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .list-filter[open] > .list-filter__summary,
+  .list-filter__on {
+    @apply border-primary-300 bg-primary-50 text-primary-700;
+  }
+  .list-filter__menu {
+    @apply absolute left-0 top-full z-20 mt-1 w-52 rounded-lg border border-greyscale-200 bg-white p-2 shadow-lg;
+  }
+  /* the applied and recognized sections side by side */
+  .list-filter__menu--wide {
+    @apply w-max;
+  }
+  .list-filter__columns {
+    @apply grid grid-cols-2 gap-x-4;
+  }
+  .list-filter__heading {
+    @apply m-0 px-1 pb-0.5 text-[0.625rem] font-semibold uppercase tracking-wide text-greyscale-500;
+  }
+  .list-filter__heading--next {
+    @apply mt-1.5 border-t border-greyscale-200 pt-1.5;
+  }
+  .list-filter__option {
+    @apply flex cursor-pointer items-center gap-2 rounded px-1 py-1 font-normal text-greyscale-700 hover:bg-greyscale-50;
+  }
+  .list-filter__clear {
+    @apply mt-1 w-full rounded px-1 py-1 text-left font-semibold text-primary-600 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+
+  /* expanded row: evidence cards stacked full width */
+  .authority-detail {
+    @apply grid gap-3 border-t border-greyscale-200 bg-greyscale-50 px-5 py-4 text-sm;
+  }
+  .evidence-card {
+    @apply flex flex-col gap-3 rounded-xl border border-greyscale-200 bg-white p-4 shadow-sm;
+  }
+  .evidence-card__head {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .evidence-card__other {
+    @apply text-xs text-greyscale-600;
+  }
+  .evidence-card__rationale {
+    @apply m-0 text-[0.8125rem] leading-relaxed text-greyscale-700;
+  }
+  .evidence-card__quote {
+    @apply m-0 border-l-2 border-greyscale-300 pl-3.5;
+  }
+  .evidence-card__quote-text {
+    @apply m-0 text-[0.8125rem] italic leading-relaxed text-greyscale-800;
+  }
+  .evidence-card__link {
+    @apply mt-2 inline-flex items-center gap-1 rounded text-xs font-semibold not-italic text-primary-700 no-underline hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .quote-status {
+    @apply m-0 mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[0.6875rem] font-medium leading-snug;
+  }
+  .quote-status__ok {
+    @apply text-green-700;
+  }
+  .quote-status__warn {
+    @apply text-amber-700;
+  }
+  .quote-status__bad {
+    @apply text-red-700;
+  }
+  .quote-status__muted {
+    @apply text-greyscale-500;
+  }
+  .quote-status__sep {
+    @apply text-greyscale-400;
+  }
+
+  /* ── History tab ─────────────────────────────────────────────────── */
+  /* a grid: one column per court level, lowest court on the left, plus
+     the time axis in column 1 and a spacer; one row per decision, newest
+     at the top, with a connector row between each pair, and the court
+     axis as the last row. Placement comes from the template as custom
+     properties (--col, --col-end, --row, --row-end). */
+  .history-scroll {
+    @apply mt-5 overflow-x-auto rounded-xl border border-greyscale-200 bg-greyscale-25;
+  }
+  .history-chain {
+    @apply grid p-4 pb-2;
+    gap: 0;
+    grid-template-columns:
+      minmax(5.5rem, max-content) 1.25rem
+      repeat(var(--history-columns), minmax(12rem, 1fr));
+    grid-template-rows:
+      repeat(calc(var(--history-rows) - 1), auto 2.5rem) auto auto;
+  }
+  .history-chain > * {
+    grid-column: var(--col, 1) / var(--col-end, auto);
+    grid-row: var(--row, auto) / var(--row-end, auto);
+  }
+  /* the axes: time up the left edge, courts along the bottom */
+  .history-axis--y {
+    @apply block h-full border-r border-greyscale-300;
+    --col: 1;
+    --row: 1;
+  }
+  .history-axis--x {
+    @apply block h-0 self-start border-t border-greyscale-300;
+    --col: 2;
+    --col-end: -1;
+  }
+  .history-chain__head {
+    @apply m-0 hidden self-start px-2 pt-1.5 text-center text-[0.625rem] font-semibold uppercase leading-tight tracking-wide text-greyscale-500 md:block;
+  }
+  .history-chain__axis-label {
+    @apply m-0 hidden self-start pr-3 pt-1.5 text-right text-[0.625rem] font-semibold uppercase tracking-wide text-greyscale-400 md:block;
+    --col: 1;
+  }
+  .history-time {
+    @apply m-0 self-center pr-3 text-right text-[0.6875rem] tabular-nums text-greyscale-500;
+    --col: 1;
+  }
+  .history-time__note {
+    @apply block text-[0.625rem] uppercase tracking-wide text-greyscale-400;
+  }
+  .history-step {
+    @apply relative z-[1] mx-2 my-1 self-center rounded-lg border border-greyscale-300 bg-white px-3 py-2 text-left;
+  }
+  .history-step--self {
+    @apply border-primary-400 bg-primary-25 shadow-sm;
+  }
+  .history-step--reported {
+    @apply border-dashed bg-greyscale-25;
+  }
+  /* the elbow in the connector row: a stub up out of the previous
+     decision's column, a rail across to this court's column, a stub up
+     into this card with the arrowhead. The insets put the stubs on the
+     end columns' centres. */
+  .history-move {
+    @apply relative;
+  }
+  .history-move__stub,
+  .history-move__rail {
+    @apply absolute block bg-greyscale-300;
+  }
+  .history-move__rail {
+    @apply top-1/2 h-px;
+    left: var(--history-inset, 50%);
+    right: var(--history-inset, 50%);
+  }
+  .history-move__stub {
+    @apply w-px;
+  }
+  .history-move__stub--from {
+    @apply bottom-0 top-1/2;
+  }
+  .history-move__stub--to {
+    @apply top-0 h-1/2;
+  }
+  .history-move__stub--to::after {
+    content: "";
+    @apply absolute left-1/2 top-0 block h-0 w-0 -translate-x-1/2 border-x-4 border-b-[6px] border-x-transparent;
+    border-bottom-color: theme('colors.greyscale.400');
+  }
+  /* an appeal moves right (to a higher court); a remand comes back left;
+     a court deciding again stays in its column */
+  .history-move--up .history-move__stub--from,
+  .history-move--down .history-move__stub--to {
+    left: var(--history-inset, 50%);
+  }
+  .history-move--up .history-move__stub--to,
+  .history-move--down .history-move__stub--from {
+    right: var(--history-inset, 50%);
+  }
+  .history-move--same .history-move__stub--from,
+  .history-move--same .history-move__stub--to {
+    left: 50%;
+  }
+  .history-key {
+    @apply m-0 mt-2 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 text-[0.6875rem] leading-snug text-greyscale-500;
+  }
+  .history-key li {
+    @apply flex items-center gap-1.5;
+  }
+  .history-key__swatch {
+    @apply inline-block h-3 w-5 flex-shrink-0 rounded border border-greyscale-300 bg-white;
+  }
+  .history-key__swatch--self {
+    @apply border-primary-400 bg-primary-25;
+  }
+  .history-key__swatch--reported {
+    @apply border-dashed border-greyscale-400 bg-greyscale-25;
+  }
+  .history-node__court {
+    @apply m-0 text-xs font-semibold uppercase leading-tight tracking-wide text-greyscale-700;
+  }
+  /* the column label, repeated on the card where the axis is hidden */
+  .history-node__tier {
+    @apply m-0 text-[0.625rem] font-semibold uppercase tracking-wide text-greyscale-400 md:hidden;
+  }
+  .history-node__case {
+    @apply m-0 mt-0.5 text-xs leading-snug text-greyscale-600;
+  }
+  .history-node__link {
+    @apply text-greyscale-700 no-underline hover:text-primary-700 hover:underline;
+  }
+  .history-node__flag {
+    @apply m-0 mt-1 text-[0.625rem] uppercase leading-tight tracking-wide text-greyscale-400;
+  }
+  .history-node__act {
+    @apply m-0 mt-1.5 flex flex-wrap items-center gap-1 text-[0.6875rem] text-greyscale-600;
+  }
+  .history-node__act-target {
+    @apply text-greyscale-500;
+  }
+  .history-node__here {
+    @apply m-0 mt-1 text-[0.625rem] font-semibold uppercase tracking-wide text-primary-700;
+  }
+  .history-node__meta {
+    @apply mt-1.5;
+  }
+  .history-node__meta-summary {
+    @apply inline-flex cursor-pointer items-center gap-1 rounded text-[0.625rem] font-semibold uppercase tracking-wide text-greyscale-500 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  /* narrow screens: one column, newest first (the cards' DOM order); the
+     axes give way to each card's own court label and date */
+  @media (max-width: 767px) {
+    .history-chain {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: none;
+    }
+    .history-chain > * {
+      grid-column: 1;
+      grid-row: auto;
+    }
+    .history-axis,
+    .history-move__rail,
+    .history-move__stub--from {
+      @apply hidden;
+    }
+    .history-move {
+      @apply flex flex-col items-center py-1;
+    }
+    .history-move__stub--to {
+      @apply relative h-5;
+      left: auto;
+      right: auto;
+    }
+    .history-time {
+      @apply pl-2 pr-0 text-left text-greyscale-400;
+    }
+  }
+
+  /* ── About page ──────────────────────────────────────────────────── */
+  .about-section {
+    @apply mt-12;
+  }
+  .about-section h2 {
+    @apply text-display-xs font-semibold text-greyscale-900;
+  }
+  .about-section h3 {
+    @apply mt-8 text-sm font-semibold uppercase tracking-wide text-greyscale-500;
+  }
+  .about-section p {
+    @apply mt-3 leading-relaxed text-greyscale-700;
+  }
+  .about-section h3 + p,
+  .about-section h3 + div,
+  .about-section h3 + dl,
+  .about-section h3 + ul {
+    @apply mt-2;
+  }
+  .about-section strong {
+    @apply font-semibold text-greyscale-900;
+  }
+  .stat-grid {
+    @apply mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4;
+  }
+  .stat-card {
+    @apply rounded-lg border border-greyscale-200 px-4 py-3;
+  }
+  .stat-card dt {
+    @apply text-xs font-semibold uppercase tracking-wide text-greyscale-500;
+  }
+  .stat-card__value {
+    @apply mt-1 text-display-xs font-semibold text-greyscale-900;
+  }
+  .stat-card__note {
+    @apply mt-1 text-sm leading-relaxed text-greyscale-600;
+  }
+  .about-cards {
+    @apply mt-3 grid gap-3 sm:grid-cols-2;
+  }
+  .about-card {
+    @apply rounded-md border border-greyscale-200 px-4 py-3 text-sm text-greyscale-700;
+  }
+  .about-card strong {
+    @apply block text-greyscale-900;
+  }
+  .about-card span {
+    @apply mt-1.5 block leading-relaxed text-greyscale-600;
+  }
+  .tier-list {
+    @apply mt-4 grid grid-cols-[max-content_1fr] items-center gap-x-4 gap-y-2.5 text-sm;
+  }
+  .tier-list dd {
+    @apply leading-relaxed text-greyscale-700;
+  }
+  .about-list {
+    @apply mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-greyscale-600;
+  }
+  .treatment-expand {
+    @apply mt-8;
+  }
+  .treatment-expand__summary {
+    @apply inline-flex cursor-pointer select-none items-center gap-1 text-sm font-semibold text-primary-600 hover:text-primary-700;
+  }
+  .table-wrap {
+    @apply mt-4 overflow-x-auto rounded-lg border border-greyscale-200;
+  }
+  .about-table {
+    @apply w-full table-fixed border-collapse text-sm;
+  }
+  .about-table thead tr {
+    @apply bg-greyscale-50 text-left;
+  }
+  .about-table th {
+    @apply border-b border-greyscale-200 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-greyscale-500;
+  }
+  .about-table tbody {
+    @apply divide-y divide-greyscale-100;
+  }
+  .about-table td {
+    @apply px-4 py-3 align-top text-greyscale-700;
+  }
+  .about-table td p {
+    @apply mt-0;
+  }
+  .about-table__list {
+    @apply m-0 list-none space-y-0.5 pl-0;
+  }
+  .about-table__list--pills {
+    @apply space-y-1.5;
+  }
+  .about-table__list--icons li {
+    @apply flex items-start gap-2;
+  }
+  .about-table__list--icons svg {
+    @apply mt-0.5 flex-shrink-0;
+  }
+  .feedback-panel {
+    @apply mt-16 rounded-2xl border-l-4 border-primary-500 bg-primary-50 px-6 py-8 shadow-sm scroll-mt-6 md:px-10 md:py-10;
+  }
+  .feedback-card {
+    @apply flex flex-col gap-1 rounded-xl border border-primary-200 bg-white px-6 py-5 no-underline transition hover:border-primary-500 hover:shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300;
+  }
+  .feedback-card__title {
+    @apply text-base font-semibold text-greyscale-900;
+  }
+  .feedback-card:hover .feedback-card__title {
+    @apply text-primary-700;
+  }
+  .feedback-card__text {
+    @apply text-sm leading-relaxed text-greyscale-600;
   }
 }
 
@@ -183,6 +1251,6 @@
 
 @layer utilities {
   .capped-width {
-    @apply w-full max-w-[--content-max-width] mx-auto;
+    @apply mx-auto w-full max-w-[--content-max-width];
   }
 }

@@ -3,326 +3,256 @@ layout: layouts/base.njk
 title: About this citator
 permalink: /about/
 ---
+{# What the preview is, what it holds (counts from _data/scope.json), how
+   to read it, and where feedback helps. The treatment table comes from
+   _data/treatments.json so it cannot drift from the taxonomy. #}
+{% from "macros/treatment.njk" import severityBadge %}
+{% from "macros/icons.njk" import icon %}
 {% set FORM_BASE = "https://forms.gle/PLACEHOLDER" %}
 
 <article class="prose-about">
 
-  {# ── Hero ────────────────────────────────────────────────────────── #}
   <header class="mb-10">
     <h1 class="text-display-sm font-semibold text-greyscale-900 leading-tight">About this citator</h1>
     <p class="mt-3 text-md text-greyscale-700 leading-relaxed">
       A preview of an AI-powered citator from
       <a href="https://free.law/" class="links" target="_blank" rel="noopener">Free Law Project</a>.
-      Browse the demo, then
-      <a href="#feedback" class="links">tell us what works and what doesn't</a>.
+      This page explains what the preview covers, how to read it, and
+      <a href="#feedback" class="links">where your feedback helps most</a>.
     </p>
   </header>
 
-  {# ── What this is ────────────────────────────────────────────────── #}
-  <section class="mt-12">
-    <h2 class="text-display-xs font-semibold text-greyscale-900">What this is</h2>
-    <p class="mt-4 text-greyscale-700 leading-relaxed">
-      A citator surfaces how a court opinion has been treated by other opinions — reversed, overruled, criticized, distinguished, or simply cited. Lawyers use citators to gauge whether a case is still good law before relying on it.
+  <section class="about-section">
+    <h2>What this is</h2>
+    <p>
+      A citator surfaces how a court opinion has been treated by other opinions — reversed, overruled, criticized, distinguished, or simply cited. A citator is used to determine whether a case is still good law before relying on it.
     </p>
-    <p class="mt-3 text-greyscale-700 leading-relaxed font-semibold text-greyscale-900">
+    <p class="font-semibold text-greyscale-900">
       This demo previews the AI-powered citator that Free Law Project will integrate into
       <a href="https://www.courtlistener.com/" class="links" target="_blank" rel="noopener">CourtListener</a>.
     </p>
   </section>
 
-  {# ── At a glance (combined: features + reference) ────────────────── #}
-  <section class="mt-12">
-    <h2 class="text-display-xs font-semibold text-greyscale-900">At a glance</h2>
-    <p class="mt-4 text-greyscale-700 leading-relaxed">
-      A few conventions and concepts worth knowing before you start.
+  <section class="about-section">
+    <h2>What's in this preview</h2>
+    <p>
+      The preview is built around <strong>{{ scope.anchors }} anchor opinions</strong>, chosen to span the court system — from the Supreme Court of the United States down to a state surrogate's court, and from {{ scope.anchor_earliest_year }} to {{ scope.anchor_latest_year }}. Around each anchor sit the cases it cites and the cases that cite it.
+    </p>
+    <dl class="stat-grid">
+      <div class="stat-card">
+        <dt>Opinions</dt>
+        <dd class="stat-card__value">{{ scope.opinions_display }}</dd>
+        <dd class="stat-card__note">{{ scope.anchors }} anchors, {{ scope.authorities_display }} cases they cite, and {{ scope.citing_display }} later opinions that cite an anchor. Those citing opinions come only from courts whose decisions <strong>control or equal</strong> the anchor’s own.</dd>
+      </div>
+      <div class="stat-card">
+        <dt>Courts</dt>
+        <dd class="stat-card__value">{{ scope.courts }}</dd>
+        <dd class="stat-card__note">Federal and state, trial through courts of last resort.</dd>
+      </div>
+      <div class="stat-card">
+        <dt>Authority references</dt>
+        <dd class="stat-card__value">{{ scope.authority_rows_display }}</dd>
+        <dd class="stat-card__note">Every case cited inside an opinion here, counted once per opinion citing it — what fills the Authorities tabs.</dd>
+      </div>
+      <div class="stat-card">
+        <dt>Citing references</dt>
+        <dd class="stat-card__value">{{ scope.citing_rows_display }}</dd>
+        <dd class="stat-card__note">Times one opinion here cites another — what fills the Cited By tabs. {{ scope.citing_rows_at_anchor_display }} of them point at an anchor; the rest point at the other cases in the preview.</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="about-section">
+    <h2>Finding your way around</h2>
+
+    <h3>The opinion list</h3>
+    <p>
+      The home page lists every opinion in the preview, newest first. Search by case name <em>or</em> by citation. Filter by court through the court picker, or by severity: a row of five toggles, most severe on the left, for each of what the opinion decided, what happened to the case on appeal, and how later courts have treated it. Selecting several shows every opinion that matches any of them. <strong>Anchor opinions only</strong> starts switched on, which narrows the list to the ten cases the preview is built around — clear it to browse everything.
+    </p>
+    <p>
+      Each card carries up to three Citator classes: <strong>Disposition</strong>, what the court decided, in the court's own words (<em>Affirmed</em>, <em>Reversed and remanded</em>, or <em>Ordered</em> when the order is none of the named kinds); <strong>On appeal</strong>, what happened to the case as it moved through the courts; and <strong>Later courts</strong>, how later cases have treated it. A class only appears when there is something to report. Where a card shows a treatment, clicking it opens the citing opinion at its entry for this case.
     </p>
 
-    <h3 class="mt-8 text-sm font-semibold uppercase tracking-wide text-greyscale-500">Severity tiers</h3>
-    <p class="mt-2 text-sm text-greyscale-600 leading-relaxed">
-      Every treatment rolls up into one of four severity tiers, most consequential first.
+    <h3>The opinion page</h3>
+    <p>Four tabs, each answering a different question.</p>
+    <div class="about-cards">
+      <div class="about-card">
+        <strong>Opinion</strong>
+        <span>The full text. Every case the opinion cites is tinted; a case with a negative treatment also carries a small dot in the colour of its most serious treatment. Click a citation and a navigator opens: step through every place that case is mentioned, open its opinion when the preview has it, or jump straight to its entry under Authorities.</span>
+      </div>
+      <div class="about-card">
+        <strong>Authorities</strong>
+        <span>Every case cited in the opinion: its name and citations, court, docket number and date, how often this opinion cites it, what this opinion does to it and what it recognizes other courts did. Ordered by how serious the treatment is; search it by name or citation, change the order, and filter by the severity of the applied treatment, of the recognized treatments, or both. Selecting several severities shows every entry that matches any of them.</span>
+      </div>
+      <div class="about-card">
+        <strong>Cited By</strong>
+        <span>Every later opinion that cites this one: its name and citations, court, docket number and date, how often it cites this case, what it does to this opinion and what it recognizes other courts did. Ordered by how serious the treatment is; search it by name or citation, change the order, and filter by the severity of the applied treatment, of the recognized treatments, or both. Selecting several severities shows every entry that matches any of them. For the anchors the list is every citing opinion from a controlling or equal court; for every other opinion it is the opinions in this preview that cite it.</span>
+      </div>
+      <div class="about-card">
+        <strong>History</strong>
+        <span>The case's route through the court system, drawn on two axes: courts along the bottom, lowest on the left and highest on the right, and time up the side, oldest at the bottom and newest at the top. An appeal moves up and to the right; a remand comes back to the left. Each card says what that court did, and opens its details.</span>
+      </div>
+    </div>
+
+    <h3>Reading the treatment evidence</h3>
+    <p>
+      Any entry with a negative treatment expands. Inside is one card per treatment, in the same order as the pills on the entry: the treatment the citing court applied first, then the treatments it recognizes. Each card gives the treatment, the reasoning, and the passage from the citing opinion that supports it, with two checks under the passage: whether it was found in the text, and whether it names the case. <strong>Read in the opinion</strong> takes you to that passage in context; on Cited By, <strong>See it in the citing opinion</strong> opens the citing opinion at its entry for this case.
     </p>
-    <dl class="mt-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2.5 items-center text-sm">
-      <dt>
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-red-500/10 text-red-700">
-          <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" /></svg>
-          Stop
-        </span>
-      </dt>
-      <dd class="text-greyscale-700 leading-relaxed">No longer good law for the proposition cited.</dd>
+  </section>
 
-      <dt>
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-orange-500/10 text-orange-700">
-          <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>
-          Warning
-        </span>
-      </dt>
-      <dd class="text-greyscale-700 leading-relaxed">Partially weakened but not entirely overturned.</dd>
+  <section class="about-section">
+    <h2>How to read a treatment</h2>
 
-      <dt>
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-700">
-          <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a.75.75 0 00-.75.75v3.5a.75.75 0 001.5 0v-3.5A.75.75 0 0010 5z" clip-rule="evenodd" /></svg>
-          Caution
-        </span>
-      </dt>
-      <dd class="text-greyscale-700 leading-relaxed">Intact but applicability is qualified.</dd>
-
-      <dt>
-        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-greyscale-200 text-greyscale-700">
-          <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9.5a.75.75 0 000 1.5h6a.75.75 0 000-1.5H7z" clip-rule="evenodd" /></svg>
-          Neutral
-        </span>
-      </dt>
-      <dd class="text-greyscale-700 leading-relaxed">Stands; citation is informational or procedural.</dd>
+    <h3>Severity tiers</h3>
+    <p>Every treatment rolls up into one of these tiers, most consequential first.</p>
+    <dl class="tier-list">
+      <dt>{{ severityBadge("Stop", "Stop") }}</dt>
+      <dd>No longer good law for the proposition cited.</dd>
+      <dt>{{ severityBadge("Warning", "Warning") }}</dt>
+      <dd>Partially weakened but not entirely overturned.</dd>
+      <dt>{{ severityBadge("Caution", "Caution") }}</dt>
+      <dd>Intact but applicability is qualified.</dd>
+      <dt>{{ severityBadge("Neutral", "Neutral") }}</dt>
+      <dd>Stands; citation is informational or procedural.</dd>
+      <dt>{{ severityBadge("Positive", "Positive") }}</dt>
+      <dd>Affirmed on appeal.</dd>
     </dl>
 
-    <h3 class="mt-8 text-sm font-semibold uppercase tracking-wide text-greyscale-500">Direct history vs. Citing reference</h3>
-    <p class="mt-2 text-sm text-greyscale-600 leading-relaxed">
-      For every opinion, the citator identifies both the procedural history of the case and how later cases have treated it.
+    <h3>Disposition, On appeal and Later courts</h3>
+    <p>
+      For every opinion the citator identifies what the court itself decided, what then happened to the case, and how later cases have treated it. The three answer different questions and should not be read as one signal.
     </p>
-    <div class="mt-3 grid gap-3 sm:grid-cols-2">
-      <div class="rounded-md border border-greyscale-200 px-4 py-3 text-sm text-greyscale-700">
-        <strong class="block text-greyscale-900">Direct history</strong>
-        <span class="block mt-1.5 text-greyscale-600 leading-relaxed">What happened to <em>this</em> case as it moved through the courts. Was it affirmed, reversed, vacated, or remanded on appeal? This is the procedural history of the case itself.</span>
+    <ul class="about-list">
+      <li><strong>Disposition</strong> — what this opinion did with the case in front of it, in the past tense as the court states it: affirmed, reversed, vacated, remanded, or a mix. An order that is none of those, such as a motion decided or a petition dismissed, shows as <em>Ordered</em>, and opens the sentence that disposed of the case.</li>
+      <li><strong>On appeal</strong> — what happened to this case afterwards, as it moved further through the courts. Was this decision itself affirmed, reversed, vacated, or remanded? The citator works this out from the later opinions that cite this one, so a step can only appear where a later opinion cites or names this case.</li>
+      <li><strong>Later courts</strong> — what later, unrelated cases said about the rule the case established. Did they follow it, distinguish it, criticize it, or overrule it? This is the signal for whether the case is still good law in practice.</li>
+    </ul>
+
+    <h3>Other things to notice</h3>
+    <div class="about-cards">
+      <div class="about-card">
+        <strong>Both sides of the same treatment</strong>
+        <span>A citation is recorded once and shown from both ends: it appears under <em>Authorities</em> on the opinion that applied it, and under <em>Cited By</em> on the opinion it was applied to, with the same treatment, severity, supporting passage and citation count. The two tabs are the two sides of one table, so they can never disagree.</span>
       </div>
-      <div class="rounded-md border border-greyscale-200 px-4 py-3 text-sm text-greyscale-700">
-        <strong class="block text-greyscale-900">Citing reference</strong>
-        <span class="block mt-1.5 text-greyscale-600 leading-relaxed">What later, unrelated cases said about the rule the case established. Did they follow it, distinguish it, criticize it, or overrule it? This is the signal for whether the case is still good law in practice.</span>
+      <div class="about-card">
+        <strong>What a court reports, versus what it does</strong>
+        <span>Under the citing court's own treatment, a pill reading <em>Recognizes to be…</em> on Authorities — <em>… as recognized by</em> on Cited By — is a treatment the court is not applying itself, but reporting: how another court has already treated the case.</span>
       </div>
+      <div class="about-card">
+        <strong>Every treatment shows its evidence</strong>
+        <span>Every treatment carries the passage from the citing opinion behind it, so you can read the court’s own words and judge the call for yourself.</span>
+      </div>
+      <div class="about-card">
+        <strong>The stripe on an entry</strong>
+        <span>Each entry on <em>Authorities</em> and <em>Cited By</em> carries a coloured stripe down its left edge showing the most serious treatment it holds — the court's own, or one it reports. An entry can read <em>Cited by</em> and still carry a red stripe, because another court’s overruling of the case was recognized. Sorting by severity orders by that most serious treatment, as applied or as recognized by the citing case.</span>
+      </div>
+      {% if flags.validation %}
+      <div class="about-card">
+        <strong>Editorial validation marks</strong>
+        <span>Three icons next to each treatment indicate whether the classification has been validated against an expert's classification — Validated, Invalidated, or Unvalidated.</span>
+      </div>
+      {% endif %}
     </div>
 
-    <h3 class="mt-8 text-sm font-semibold uppercase tracking-wide text-greyscale-500">Other things to notice</h3>
-    <div class="mt-3 grid gap-3 sm:grid-cols-2">
-      <div class="rounded-md border border-greyscale-200 px-3 py-3 text-sm text-greyscale-700">
-        <strong class="block text-greyscale-900">Consistency across views</strong>
-        <span class="block mt-1 text-greyscale-600 leading-relaxed">Each treatment is recorded once and surfaces wherever it's relevant — the same severity, label, and validation indicator appear on the search results card, the opinion-page summary, the Authorities tab, and the Cited By tab.</span>
-      </div>
-      <div class="rounded-md border border-greyscale-200 px-3 py-3 text-sm text-greyscale-700">
-        <strong class="block text-greyscale-900">Supporting quote in context</strong>
-        <span class="block mt-1 text-greyscale-600 leading-relaxed">Every Authorities and Cited By row expands to show the surrounding paragraph from the citing opinion, with the quote highlighted. On the Authorities tab, clicking the quote jumps to the Opinion tab so you can read it in full context.</span>
-      </div>
-      <div class="rounded-md border border-greyscale-200 px-3 py-3 text-sm text-greyscale-700">
-        <strong class="block text-greyscale-900">"As recognized by" treatments</strong>
-        <span class="block mt-1 text-greyscale-600 leading-relaxed">Used when the citing court isn't doing the action itself, but is acknowledging that another case has. Applied as a modifier (e.g., <em>Limited as recognized by</em>) that inherits the underlying severity.</span>
-      </div>
-      <div class="rounded-md border border-greyscale-200 px-3 py-3 text-sm text-greyscale-700">
-        <strong class="block text-greyscale-900">Editorial validation marks</strong>
-        <span class="block mt-1 text-greyscale-600 leading-relaxed">Three icons next to each treatment indicate whether the model's classification has been validated against the expert's classification — Validated, Invalidated, or Unvalidated.</span>
-      </div>
-    </div>
-
-    <details class="treatment-expand mt-8">
-      <summary class="cursor-pointer inline-flex items-center gap-1 text-sm font-semibold text-primary-600 hover:text-primary-700 select-none">
-        <svg class="w-3.5 h-3.5 expand-chevron transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-        </svg>
+    <details class="treatment-expand">
+      <summary class="treatment-expand__summary">
+        {{ icon("chevron-right", "w-3.5 h-3.5 expand-chevron") }}
         <span>See the full treatment list</span>
       </summary>
-      <div class="mt-4 overflow-x-auto rounded-lg border border-greyscale-200">
-        <table class="w-full text-sm border-collapse table-fixed">
+      <div class="table-wrap">
+        <table class="about-table">
           <thead>
-            <tr class="bg-greyscale-50 text-left">
-              <th class="w-1/5 px-4 py-2.5 font-semibold uppercase tracking-wide text-xs text-greyscale-500 border-b border-greyscale-200">Severity</th>
-              <th class="w-2/5 px-4 py-2.5 font-semibold uppercase tracking-wide text-xs text-greyscale-500 border-b border-greyscale-200">Direct history</th>
-              <th class="w-2/5 px-4 py-2.5 font-semibold uppercase tracking-wide text-xs text-greyscale-500 border-b border-greyscale-200">Citing reference</th>
-            </tr>
+            <tr><th class="w-1/5">Severity</th><th class="w-2/5">Disposition / On Appeal</th><th class="w-2/5">Later courts</th></tr>
           </thead>
-          <tbody class="divide-y divide-greyscale-100">
+          <tbody>
+            {% for row in treatments %}
             <tr>
-              <td class="px-4 py-3 align-top">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-red-500/10 text-red-700">
-                  <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" /></svg>
-                  Stop
-                </span>
-              </td>
-              <td class="px-4 py-3 align-top text-greyscale-700">
-                <ul class="space-y-0.5">
-                  <li>Reversed by</li>
-                  <li>Reversed and remanded by</li>
-                  <li>Vacated by</li>
-                  <li>Vacated and remanded by</li>
-                </ul>
-              </td>
-              <td class="px-4 py-3 align-top text-greyscale-700">
-                <ul class="space-y-0.5">
-                  <li>Overruled by</li>
-                  <li>Abrogated by</li>
-                  <li>Questioned by</li>
-                </ul>
-              </td>
+              <td>{{ severityBadge(row.severity, row.severity) }}</td>
+              <td><ul class="about-table__list about-table__list--pills">{% for t in row.direct_history %}<li>{{ severityBadge(row.severity, t) }}</li>{% endfor %}</ul></td>
+              <td><ul class="about-table__list about-table__list--pills">{% for t in row.citing_reference %}<li>{{ severityBadge(row.severity, t) }}</li>{% endfor %}</ul></td>
             </tr>
-            <tr>
-              <td class="px-4 py-3 align-top">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-orange-500/10 text-orange-700">
-                  <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" /></svg>
-                  Warning
-                </span>
-              </td>
-              <td class="px-4 py-3 align-top text-greyscale-700">
-                <ul class="space-y-0.5">
-                  <li>Affirmed in part; Reversed in part by</li>
-                  <li>Affirmed in part; Vacated in part by</li>
-                </ul>
-              </td>
-              <td class="px-4 py-3 align-top text-greyscale-700">
-                <ul class="space-y-0.5">
-                  <li>Disapproved by</li>
-                  <li>Limited by</li>
-                </ul>
-              </td>
-            </tr>
-            <tr>
-              <td class="px-4 py-3 align-top">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-700">
-                  <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a.75.75 0 00-.75.75v3.5a.75.75 0 001.5 0v-3.5A.75.75 0 0010 5z" clip-rule="evenodd" /></svg>
-                  Caution
-                </span>
-              </td>
-              <td class="px-4 py-3 align-top text-greyscale-700">
-                <ul class="space-y-0.5">
-                  <li>Remanded by</li>
-                  <li>Cert. granted by</li>
-                </ul>
-              </td>
-              <td class="px-4 py-3 align-top text-greyscale-700">
-                <ul class="space-y-0.5">
-                  <li>Criticized by</li>
-                  <li>Distinguished by</li>
-                  <li>Declined to follow by</li>
-                </ul>
-              </td>
-            </tr>
-            <tr>
-              <td class="px-4 py-3 align-top">
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide bg-greyscale-200 text-greyscale-700">
-                  <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9.5a.75.75 0 000 1.5h6a.75.75 0 000-1.5H7z" clip-rule="evenodd" /></svg>
-                  Neutral
-                </span>
-              </td>
-              <td class="px-4 py-3 align-top text-greyscale-700">
-                <ul class="space-y-0.5">
-                  <li>Dismissed by</li>
-                  <li>Affirmed by</li>
-                  <li>Cert. denied by</li>
-                </ul>
-              </td>
-              <td class="px-4 py-3 align-top text-greyscale-700">
-                <ul class="space-y-0.5">
-                  <li>Cited by</li>
-                </ul>
-              </td>
-            </tr>
+            {% endfor %}
           </tbody>
         </table>
       </div>
-      <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
-        Each negative treatment also has an "as recognized by" modifier (e.g., <em>Limited as recognized by</em>) — used when the citing court isn't doing the action itself, but is acknowledging that some other case has. The modifier inherits the same severity tier as the underlying treatment.
+      <p>
+        Each negative treatment also has an "as recognized by" form (e.g., <em>Limited as recognized by</em>) — used when the citing court isn't doing the action itself, but is acknowledging that some other case has. It keeps the same severity tier as the underlying treatment, and sits under the court's own treatment in the Treatment column.
       </p>
     </details>
   </section>
 
-  {# ── Preview vs. production ──────────────────────────────────────── #}
-  <section class="mt-12">
-    <h2 class="text-display-xs font-semibold text-greyscale-900">Preview vs. production</h2>
-    <p class="mt-4 text-greyscale-700 leading-relaxed">
-      The preview is deliberately scoped — running it as a standalone site lets us validate the citator design and user experience, and gather expert feedback on the model's classifications, before committing to a full CourtListener integration.
+  <section class="about-section">
+    <h2>Preview vs. production</h2>
+    <p>
+      The preview is deliberately scoped — running it as a standalone site lets us validate the citator design and user experience, and gather expert feedback on its classifications, before committing to a full CourtListener integration.
     </p>
-    <p class="mt-3 text-greyscale-700 leading-relaxed">
-      Several things will look different in production:
-    </p>
-
-    <div class="mt-6 overflow-x-auto rounded-lg border border-greyscale-200">
-      <table class="w-full text-sm border-collapse table-fixed">
+    <p>Several things will look different in production:</p>
+    <div class="table-wrap">
+      <table class="about-table">
         <thead>
-          <tr class="bg-greyscale-50 text-left">
-            <th class="w-1/5 px-4 py-2.5 font-semibold uppercase tracking-wide text-xs text-greyscale-500 border-b border-greyscale-200">Aspect</th>
-            <th class="w-2/5 px-4 py-2.5 font-semibold uppercase tracking-wide text-xs text-greyscale-500 border-b border-greyscale-200">In this preview</th>
-            <th class="w-2/5 px-4 py-2.5 font-semibold uppercase tracking-wide text-xs text-greyscale-500 border-b border-greyscale-200">In production (CourtListener)</th>
-          </tr>
+          <tr><th class="w-1/5">Aspect</th><th class="w-2/5">In this preview</th><th class="w-2/5">In production (CourtListener)</th></tr>
         </thead>
-        <tbody class="divide-y divide-greyscale-100">
+        <tbody>
+          {% if flags.validation %}
           <tr>
-            <td class="px-4 py-3 align-top font-semibold text-greyscale-900">Validation icons</td>
-            <td class="px-4 py-3 align-top text-greyscale-700">
-              <p class="mb-2">All three icons render — demo-only diagnostics for experts auditing the model:</p>
-              <div class="space-y-1.5">
-                <div class="flex items-start gap-2">
-                  <svg class="w-4 h-4 text-blue-700 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                  <span><strong class="font-semibold text-greyscale-900">Validated</strong> — model = expert.</span>
-                </div>
-                <div class="flex items-start gap-2">
-                  <svg class="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                  <span><strong class="font-semibold text-greyscale-900">Invalidated</strong> — model ≠ expert.</span>
-                </div>
-                <div class="flex items-start gap-2">
-                  <svg class="w-4 h-4 text-greyscale-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" /></svg>
-                  <span><strong class="font-semibold text-greyscale-900">Unvalidated</strong> — model only (no expert review).</span>
-                </div>
-              </div>
+            <td class="font-semibold text-greyscale-900">Validation icons</td>
+            <td>
+              <p class="mb-2">All three icons render — demo-only diagnostics for experts auditing the classifications:</p>
+              <ul class="about-table__list about-table__list--icons">
+                <li>{{ icon("check-circle", "w-4 h-4 text-blue-700") }}<span><strong>Validated</strong> — matches the expert.</span></li>
+                <li>{{ icon("x-circle", "w-4 h-4 text-purple-600") }}<span><strong>Invalidated</strong> — the expert found a negative treatment that was missed or labelled differently.</span></li>
+                <li>{{ icon("question-circle", "w-4 h-4 text-greyscale-500") }}<span><strong>Unvalidated</strong> — no expert review.</span></li>
+              </ul>
             </td>
-            <td class="px-4 py-3 align-top text-greyscale-700">
-              <p class="mb-2">Only the blue Validated check renders. Most cases won't have expert review, so the other two would be noise on every row.</p>
-              <div class="flex items-start gap-2">
-                <svg class="w-4 h-4 text-blue-700 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
-                <span><strong class="font-semibold text-greyscale-900">Validated</strong> only.</span>
-              </div>
+            <td>
+              <p class="mb-2">Only the blue Validated check renders. Most cases won't have expert review, so the other two would be noise on everything listed.</p>
+              <ul class="about-table__list about-table__list--icons">
+                <li>{{ icon("check-circle", "w-4 h-4 text-blue-700") }}<span><strong>Validated</strong> only.</span></li>
+              </ul>
             </td>
           </tr>
+          {% endif %}
           <tr>
-            <td class="px-4 py-3 align-top font-semibold text-greyscale-900">Editorial contributions</td>
-            <td class="px-4 py-3 align-top text-greyscale-700">None.</td>
-            <td class="px-4 py-3 align-top text-greyscale-700">Authenticated users vetted for legal expertise can contribute corrections, growing the validated corpus over time.</td>
+            <td class="font-semibold text-greyscale-900">Coverage</td>
+            <td>{{ scope.opinions_display }} opinions around {{ scope.anchors }} anchors. Complete authorities lists for the anchors and for the opinions from controlling courts that cite them.</td>
+            <td>Every opinion CourtListener holds.</td>
           </tr>
           <tr>
-            <td class="px-4 py-3 align-top font-semibold text-greyscale-900">Search</td>
-            <td class="px-4 py-3 align-top text-greyscale-700">Case-name keyword filter only.</td>
-            <td class="px-4 py-3 align-top text-greyscale-700">Full keyword search across opinion bodies, plus semantic search.</td>
+            <td class="font-semibold text-greyscale-900">Links between cases</td>
+            <td>A cited case opens its own page only when it is one of the {{ scope.opinions_display }} opinions here; otherwise its name is plain text.</td>
+            <td>Every cited case links to its opinion.</td>
           </tr>
           <tr>
-            <td class="px-4 py-3 align-top font-semibold text-greyscale-900">Filters</td>
-            <td class="px-4 py-3 align-top text-greyscale-700">Court hierarchy + severity filters only.</td>
-            <td class="px-4 py-3 align-top text-greyscale-700">All existing CourtListener filters, plus citator severity and treatment filters.</td>
+            <td class="font-semibold text-greyscale-900">Search</td>
+            <td>Case name or citation, across the opinions in the preview.</td>
+            <td>Full keyword search across opinion bodies, plus semantic search.</td>
           </tr>
           <tr>
-            <td class="px-4 py-3 align-top font-semibold text-greyscale-900">CourtListener integration</td>
-            <td class="px-4 py-3 align-top text-greyscale-700">Standalone microsite to keep the iteration loop short.</td>
-            <td class="px-4 py-3 align-top text-greyscale-700">Lives inside CourtListener's chrome alongside its existing search, alerts, dockets, and account features.</td>
+            <td class="font-semibold text-greyscale-900">Filters</td>
+            <td>Court and severity on the opinion list; search by name or citation, sorting and a severity filter over applied and recognized treatments on the Authorities and Cited By tabs.</td>
+            <td>All existing CourtListener filters, plus citator severity and treatment filters.</td>
           </tr>
         </tbody>
       </table>
     </div>
-
-    <p class="mt-4 text-greyscale-700 leading-relaxed">
-      If something feels missing or rough — a filter you'd reach for instinctively, a navigation shortcut you expect, a citator feature you can't find — we want to hear about it. Surfacing those reactions early is exactly what this preview is for.
-    </p>
   </section>
 
-  {# ── Feedback ────────────────────────────────────────────────────── #}
-  <section
-    id="feedback"
-    class="mt-16 rounded-2xl bg-primary-50 border-l-4 border-primary-500 shadow-sm px-6 py-8 md:px-10 md:py-10 scroll-mt-6"
-  >
+  <section id="feedback" class="feedback-panel">
     <h2 class="text-display-sm font-semibold text-greyscale-900 leading-tight">Share your feedback</h2>
     <p class="mt-3 text-md text-greyscale-700 leading-relaxed">
-      We want your honest feedback — what's broken, what's confusing, what's missing. Two forms below, pick the one that best matches your background.
+      We want your honest feedback — what's confusing, what's missing, what's wrong.
     </p>
-    <div class="mt-6 grid gap-4 sm:grid-cols-2">
-      <a
-        href="{{ FORM_BASE }}?audience=general"
-        target="_blank"
-        rel="noopener"
-        class="group flex flex-col gap-1 rounded-xl bg-white border border-primary-200 hover:border-primary-500 hover:shadow-md px-6 py-5 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300 transition"
-      >
-        <span class="text-base font-semibold text-greyscale-900 group-hover:text-primary-700">General user feedback →</span>
-        <span class="text-sm text-greyscale-600 leading-relaxed">Tell us about the page design, navigation, and overall usability. No legal background needed.</span>
+    <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
+      Two forms below — pick the one that best matches your background.
+    </p>
+    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      <a href="{{ FORM_BASE }}?audience=general" target="_blank" rel="noopener" class="feedback-card">
+        <span class="feedback-card__title">General user feedback →</span>
+        <span class="feedback-card__text">How the pages read and how easy they are to move around. No legal background needed.</span>
       </a>
-      <a
-        href="{{ FORM_BASE }}?audience=expert"
-        target="_blank"
-        rel="noopener"
-        class="group flex flex-col gap-1 rounded-xl bg-white border border-primary-200 hover:border-primary-500 hover:shadow-md px-6 py-5 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300 transition"
-      >
-        <span class="text-base font-semibold text-greyscale-900 group-hover:text-primary-700">Legal professional feedback →</span>
-        <span class="text-sm text-greyscale-600 leading-relaxed">Tell us about the page design and usability, your view of the citator's classification quality, and how this experience compares to the citators you currently use.</span>
+      <a href="{{ FORM_BASE }}?audience=expert" target="_blank" rel="noopener" class="feedback-card">
+        <span class="feedback-card__title">Legal professional feedback →</span>
+        <span class="feedback-card__text">Whether you would use this before relying on a case, whether each treatment shows you enough to form your own view, and how it compares with the citators you use today.</span>
       </a>
     </div>
   </section>

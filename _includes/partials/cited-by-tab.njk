@@ -1,174 +1,132 @@
-{# Cited By tab content. Expects:
-   - `opinion.cited_by` array (pre-sorted severity asc, date desc;
-     each row has `recency_index` for the secondary recency sort).
-   Lives inside an Alpine `x-data="citedByFilter"` scope. #}
-{% from "macros/treatment.njk" import severityBadge, validationDot, indicatorState %}
+{# Cited By tab: one row per later opinion that cites this one, with what
+   it did itself and what it reports other courts did. Reads
+   `opinion.cited_by` (sorted severity then date), `opinion.cited_by_populated`,
+   `opinion.cited_by_scope` ("controlling" = every citing opinion from a
+   court that binds this one; "collection" = only the opinions on the
+   site) and `opinion.citing_counts`. Same column grid, sort dropdown and
+   filter menu as the Authorities tab. #}
+{% from "macros/list_header.njk" import listHeader, listToolbar %}
+{% from "macros/treatment.njk" import severityBadge, validationDot %}
+{% from "macros/evidence.njk" import evidenceCard %}
+{% from "macros/lists.njk" import citeList %}
+{% from "macros/icons.njk" import icon %}
 
-<div x-data="citedByFilter">
-  <div class="flex flex-wrap items-end gap-x-6 gap-y-4">
-    <fieldset class="pr-6 border-r border-greyscale-200">
-      <legend class="text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Severity</legend>
-      <div class="flex flex-wrap gap-2">
-        {% set sevTiers = [
-          {"label": "Stop", "prop": "filterStop", "active": "bg-red-500/10 text-red-700 border-red-500", "inactive": "bg-white text-red-700 border-red-200 hover:bg-red-50"},
-          {"label": "Warning", "prop": "filterWarning", "active": "bg-orange-500/10 text-orange-700 border-orange-500", "inactive": "bg-white text-orange-700 border-orange-200 hover:bg-orange-50"},
-          {"label": "Caution", "prop": "filterCaution", "active": "bg-amber-500/15 text-amber-700 border-amber-500", "inactive": "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"},
-          {"label": "Neutral", "prop": "filterNeutral", "active": "bg-greyscale-200 text-greyscale-700 border-greyscale-400", "inactive": "bg-white text-greyscale-700 border-greyscale-300 hover:bg-greyscale-100"}
-        ] %}
-        {% for s in sevTiers %}
-        <button
-          type="button"
-          x-on:click="toggleFilter('{{ s.prop }}')"
-          x-bind:aria-pressed="{{ s.prop }} ? 'true' : 'false'"
-          x-bind:class="{{ s.prop }} ? '{{ s.active }}' : '{{ s.inactive }}'"
-          class="px-3 py-1 text-xs font-medium rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
-        >
-          {{ s.label }}
-        </button>
-        {% endfor %}
-      </div>
-    </fieldset>
-
-    <fieldset class="pr-6 border-r border-greyscale-200">
-      <legend class="text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Validation</legend>
-      <div class="flex flex-wrap gap-2">
-        {% set valTiers = [
-          {"label": "Validated", "prop": "filterAgree", "active": "bg-blue-500/10 text-blue-700 border-blue-500", "inactive": "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"},
-          {"label": "Invalidated", "prop": "filterDisagree", "active": "bg-purple-500/10 text-purple-700 border-purple-500", "inactive": "bg-white text-purple-700 border-purple-200 hover:bg-purple-50"},
-          {"label": "Unvalidated", "prop": "filterUnverified", "active": "bg-greyscale-200 text-greyscale-700 border-greyscale-400", "inactive": "bg-white text-greyscale-700 border-greyscale-300 hover:bg-greyscale-100"}
-        ] %}
-        {% for v in valTiers %}
-        <button
-          type="button"
-          x-on:click="toggleFilter('{{ v.prop }}')"
-          x-bind:aria-pressed="{{ v.prop }} ? 'true' : 'false'"
-          x-bind:class="{{ v.prop }} ? '{{ v.active }}' : '{{ v.inactive }}'"
-          class="px-3 py-1 text-xs font-medium rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
-        >
-          {{ v.label }}
-        </button>
-        {% endfor %}
-      </div>
-    </fieldset>
-
-    <div>
-      <label for="cited-by-sort" class="block text-xs uppercase tracking-wide font-semibold text-greyscale-500 mb-2">Sort</label>
-      <select
-        id="cited-by-sort"
-        x-on:change="setSort($event.target.value)"
-        class="px-3 py-1.5 text-sm border border-greyscale-300 rounded-lg bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300"
-      >
-        <option value="severity">Severity</option>
-        <option value="recency">Recency</option>
-      </select>
-    </div>
-
-    <p
-      role="status"
-      aria-live="polite"
-      class="ml-auto text-xs text-greyscale-500"
-    >
-      <span x-text="visibleCount">{{ opinion.cited_by | length }}</span> of <span x-text="totalCount">{{ opinion.cited_by | length }}</span> citing cases
-    </p>
-  </div>
-
-  {% if opinion.cited_by | length == 0 %}
-  <p class="mt-6 bg-white rounded-2xl border border-greyscale-200 px-5 py-4 text-sm text-greyscale-600">
-    No subsequent opinions cite this case in our dataset.
+<section class="cited-by" aria-label="Citing opinions" x-data="citedByFilter">
+  {% if opinion.cited_by_scope == "collection" %}
+  <p class="tab-note tab-note--end">
+    Only the opinions in this preview are shown.
+    <a href="{{ opinion.cl_url }}" target="_blank" rel="noopener" class="links">See
+    {% if opinion.citing_counts and opinion.citing_counts.total %}all {{ opinion.citing_counts.total }} citing opinion{% if opinion.citing_counts.total != 1 %}s{% endif %}
+    {%- else %}the citing opinions{% endif %} on CourtListener</a>
   </p>
   {% else %}
-  <ul role="list" class="mt-6 list-none pl-0 m-0 flex flex-col bg-white rounded-2xl border border-greyscale-200 overflow-hidden">
+  <p class="tab-note tab-note--end">Only citing opinions from a controlling or equal court are shown.</p>
+  {% endif %}
+
+  {% if opinion.cited_by | length == 0 and opinion.cited_by_populated %}
+  <p class="tab-empty">No subsequent opinions from a controlling or equal court cite this case.</p>
+  {% elif opinion.cited_by | length == 0 and opinion.citing_counts %}
+  {% set n = opinion.citing_counts.controlling %}
+  <div class="tab-empty">
+    <p class="m-0">
+      {% if n == 0 %}No opinions from a controlling or equal court cite this case.
+      {% else %}This opinion is cited by <strong class="font-semibold text-greyscale-900">{{ n }}</strong> opinion{% if n != 1 %}s{% endif %} from a controlling or equal court{% if opinion.citing_counts.total > n %}, {{ opinion.citing_counts.total }} in all{% endif %}. Those citing opinions are outside the preview's scope.{% endif %}
+    </p>
+    <p class="mt-2 m-0"><a href="{{ opinion.cl_url }}" target="_blank" rel="noopener" class="links">See the citing opinions on CourtListener</a></p>
+  </div>
+  {% elif opinion.cited_by | length == 0 %}
+  <p class="tab-empty">Citing opinions have not been collected for this opinion yet.</p>
+  {% else %}
+  {{ listToolbar([
+    {"key": "severity", "label": "Severity, most severe first"},
+    {"key": "name", "label": "Alphabetical, A to Z"},
+    {"key": "recency", "label": "Date filed, newest first"},
+    {"key": "mentions", "label": "Times cited, most first"}
+  ], "citing opinions", "Applied treatment", "Recognized treatment", flags.validation) }}
+  {{ listHeader([
+    {"label": "Treatment", "title": "What the citing opinion does to this case, then what it recognizes other courts did"},
+    {"label": "Citing opinion", "title": "The citing opinion, by name"},
+    {"label": "Date", "class": "col-head--pad", "title": "When the citing opinion was decided"},
+    {"label": "Cites", "class": "col-head--pad", "title": "How often the citing opinion cites this case"}
+  ], flags.validation) }}
+  <ul role="list" class="citator-list">
     {% for cb in opinion.cited_by %}
-    {% set vstate = indicatorState(cb.source, cb.treatment, cb.expert_treatment) | trim %}
     <li
       data-row-id="{{ cb.row_id }}"
+      data-search="{{ cb.search_text }}"
       data-severity="{{ cb.severity | lower }}"
-      data-validation="{{ vstate }}"
+      data-applied-severity="{{ (cb.applied[0].severity if cb.applied | length else cb.severity) | lower }}"
+      data-rec-severity="{{ cb.recognized_filter | lower }}"
+      data-validation="{{ cb.validation }}"
       data-recency-index="{{ cb.recency_index }}"
-      x-show="rowVisible($el)"
-      x-bind:style="rowOrder($el)"
-      class="border-b border-greyscale-200 last:border-b-0"
+      data-name-index="{{ cb.name_index }}"
+      data-severity-index="{{ cb.severity_index }}"
+      data-mentions-index="{{ cb.mentions_index }}"
+      x-bind:class="rowClass"
+      x-bind:style="rowStyle"
+      class="cited-authority sev-rail sev-rail--{{ cb.severity | lower }}"
     >
-      <details class="authority-row">
-        <summary class="cursor-pointer list-none px-5 py-3.5 hover:bg-greyscale-50 focus-visible:bg-greyscale-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-300">
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            {{ severityBadge(cb.severity, cb.treatment) }}
-            <span class="flex-1 min-w-0 text-sm inline-flex items-center gap-x-2">
-              {% if cb.is_scoped %}
-                <a href="/opinion/{{ cb.citing_cluster_id }}/" class="font-semibold text-greyscale-900 hover:text-primary-700 hover:underline" x-on:click.stop>{{ cb.citing_case_name }}</a>
-              {% else %}
-                <span class="font-semibold text-greyscale-900">{{ cb.citing_case_name }}</span>
-              {% endif %}
-              {{ validationDot(vstate, cb.expert_treatment) }}
+      {% if cb.has_detail %}<details class="authority-row"><summary class="authority-row__summary">{% else %}<div>{% endif %}
+        <div class="citator-row{% if flags.validation %} citator-row--validation{% endif %}">
+          <div class="citator-row__treatment">
+            {% for p in cb.applied %}
+            <span>
+              {{ severityBadge(p.severity, p.treatment) }}
+              {% if flags.validation %}{{ validationDot(p.validation, p.expert_treatment) }}{% endif %}
             </span>
-            <svg class="w-4 h-4 expand-chevron text-greyscale-400 transition-transform flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-            </svg>
+            {% endfor %}
+            {% for p in cb.recognized %}
+            <span title="{{ p.treatment_past }} as recognized by {{ cb.citing_case_name }}">
+              {{ severityBadge(p.severity, p.treatment_past ~ " as recognized by") }}
+              {% if flags.validation %}{{ validationDot(p.validation, p.expert_treatment) }}{% endif %}
+            </span>
+            {% endfor %}
           </div>
-          <dl class="mt-2 grid gap-y-1 text-xs">
-            {# Line 1: Court + File Date + Docket Number (wraps) #}
-            <div class="flex flex-wrap gap-x-10 gap-y-0.5">
-              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Court</dt>
-                <dd class="text-greyscale-700">{{ cb.citing_court_display }}</dd>
-              </div>
-              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">File Date</dt>
-                <dd class="text-greyscale-700">{{ cb.citing_date_filed }}</dd>
-              </div>
-              {% if cb.citing_docket_number %}
-              <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Docket Number</dt>
-                <dd class="text-greyscale-700">{{ cb.citing_docket_number }}</dd>
-              </div>
+          <div class="cited-authority__body">
+            <div class="citator-row__name">
+              {% if cb.is_scoped %}
+                <a href="/opinion/{{ cb.citing_cluster_id }}/" class="citator-row__link" x-on:click.stop>{{ cb.citing_case_name }}</a>
+              {% else %}
+                <span class="citator-row__link">{{ cb.citing_case_name }}</span>
               {% endif %}
-            </div>
-            {# Line 2: Citations — first 3 always shown; remaining hidden
-               behind a "+N" expand button. Each row scopes its own state. #}
-            {% if cb.citing_citations %}
-            {% set citationCount = cb.citing_citations | length %}
-            <div class="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5" x-data="{ showAll: false }">
-              <dt class="uppercase tracking-wide font-semibold text-greyscale-500">Citations</dt>
-              <dd class="text-greyscale-700">
-                {% for c in cb.citing_citations %}
-                  {%- if loop.index == 1 -%}
-                    {{ c }}
-                  {%- elif loop.index <= 3 -%}
-                    <span class="text-greyscale-400" aria-hidden="true"> · </span>{{ c }}
-                  {%- else -%}
-                    <span x-show="showAll" x-cloak><span class="text-greyscale-400" aria-hidden="true"> · </span>{{ c }}</span>
-                  {%- endif -%}
-                {% endfor %}
-                {% if citationCount > 3 %}
-                <button
-                  type="button"
-                  x-show="!showAll"
-                  x-on:click.stop.prevent="showAll = true"
-                  aria-label="Show {{ citationCount - 3 }} more citation{% if citationCount - 3 != 1 %}s{% endif %}"
-                  class="ml-1 inline-flex items-center justify-center rounded-full bg-greyscale-100 hover:bg-greyscale-200 px-1.5 py-0.5 text-[10px] font-semibold text-greyscale-600 transition"
-                >
-                  +{{ citationCount - 3 }}
-                </button>
-                {% endif %}
-              </dd>
-            </div>
-            {% endif %}
-          </dl>
-        </summary>
 
-        <div class="px-5 py-4 bg-greyscale-50 border-t border-greyscale-200 space-y-3 text-sm">
-          {% if cb.expand and cb.expand.context %}
-          {% set ctx = cb.expand.context %}
-          <p class="pl-3 border-l-2 border-greyscale-300 text-greyscale-700 leading-relaxed">
-            {%- if ctx.before %}{{ ctx.before }} {% endif -%}
-            <span class="inline bg-yellow-100 text-greyscale-900 font-semibold rounded px-1">{{ ctx.quote }}</span>
-            {%- if ctx.after %} {{ ctx.after }}{% endif -%}
-          </p>
-          {% endif %}
+            </div>
+            <p class="citator-row__meta">{{ cb.citing_court_display }}</p>
+            {% if cb.citing_docket_numbers | length or cb.citing_citations | length %}
+            <dl class="cited-authority__meta">
+              {% if cb.citing_docket_numbers | length %}
+              <dt>Docket Number</dt>
+              <dd>{{ citeList(cb.citing_docket_numbers, noun="docket number") }}</dd>
+              {% endif %}
+              {% if cb.citing_citations | length %}
+              <dt>Citations</dt>
+              <dd>{{ citeList(cb.citing_citations) }}</dd>
+              {% endif %}
+            </dl>
+            {% endif %}
+          </div>
+          <div class="citator-row__date">{{ cb.citing_date_short }}</div>
+          <div class="citator-row__cited" title="{{ cb.citing_n_mentions }} mention{% if cb.citing_n_mentions != 1 %}s{% endif %} of this case">{{ cb.citing_n_mentions or "" }}</div>
+          {% if cb.has_detail %}
+          {{ icon("chevron-right", "citator-row__chevron expand-chevron") }}
+          {% else %}<span aria-hidden="true"></span>{% endif %}
         </div>
-      </details>
+      {% if cb.has_detail %}</summary>
+        <div class="authority-detail">
+          {% for c in cb.evidence_cards %}
+            {% if cb.is_scoped and (cb.citing_authority_n or c.quote_status != "missing") %}
+              {# the citing opinion's own Authorities row for this case, or
+                 the passage itself when its authorities were never extracted #}
+              {% set href = "/opinion/" ~ cb.citing_cluster_id ~ "/" ~ ("#authority-" ~ cb.citing_authority_n if cb.citing_authority_n else "#q=" ~ (c.quote | urlencode)) %}
+              {{ evidenceCard(c, "the citing opinion", href, "See it in the citing opinion") }}
+            {% else %}
+              {{ evidenceCard(c, "the citing opinion", "", "", false) }}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </details>{% else %}</div>{% endif %}
     </li>
     {% endfor %}
   </ul>
   {% endif %}
-</div>
+</section>

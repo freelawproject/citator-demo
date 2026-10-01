@@ -1,0 +1,98 @@
+{# History tab: the case's route through the courts on two axes, courts
+   along the bottom (lowest on the left, highest on the right) and time up
+   the side (oldest at the bottom, newest at the top), one row per
+   decision. Reads `opinion.appellate_history` (history.py): `chain` is
+   the decisions in time order with their grid cell and the connector
+   from the decision before; `levels` names the court columns. Grid placement is
+   passed to the stylesheet as custom properties. The cards are emitted
+   newest first, so the narrow-screen single column reads top-down too. #}
+{% from "macros/treatment.njk" import severityBadge %}
+{% from "macros/icons.njk" import icon %}
+
+{% set history = opinion.appellate_history %}
+{% set axis_row = (history.chain | length) * 2 %}
+<section aria-label="Appellate history">
+  {% if history.chain | length > 1 %}
+  <div class="history-scroll">
+  <div class="history-chain" style="--history-columns: {{ history.levels | length }}; --history-rows: {{ history.chain | length }}">
+    <span class="history-axis history-axis--y" style="--row-end: {{ axis_row }}" aria-hidden="true"></span>
+    <span class="history-axis history-axis--x" style="--row: {{ axis_row }}" aria-hidden="true"></span>
+
+    {# the court axis: one label per column, along the bottom #}
+    {% for lv in history.levels %}
+    <p class="history-chain__head" style="--col: {{ lv.col }}; --row: {{ axis_row }}">{{ lv.label }}</p>
+    {% endfor %}
+    <p class="history-chain__axis-label" style="--row: {{ axis_row }}">Time ↑</p>
+
+    {% for step in history.chain | reverse %}
+    <div class="history-step{% if step.role == 'self' %} history-step--self{% elif step.role == 'reported' %} history-step--reported{% endif %}"
+         style="--col: {{ step.col }}; --row: {{ step.row }}">
+      <p class="history-node__court">{{ step.court }}</p>
+      <p class="history-node__tier">{{ step.tier }}</p>
+      <p class="history-node__case">
+        {% if step.role == "reported" %}As reported by {% endif %}
+        {% if step.url %}<a href="{{ step.url }}" class="history-node__link">{{ step.case_name }}</a>
+        {% else %}{{ step.case_name }}{% endif %}
+      </p>
+      {% if step.role == "self" %}<p class="history-node__here">This opinion</p>{% endif %}
+      {% if step.cluster_id %}
+      <details class="history-node__meta">
+        <summary class="history-node__meta-summary">
+          {{ icon("chevron-right", "w-3 h-3 expand-chevron") }}
+          Details
+        </summary>
+        <dl class="meta-list meta-list--compact">
+          {% if step.date_filed %}<div><dt>File Date</dt><dd>{{ step.date_filed | replace("-", "/") }}</dd></div>{% endif %}
+          {% if step.docket_number %}<div><dt>Docket Number</dt><dd>{{ step.docket_number }}</dd></div>{% endif %}
+          {% if step.citations | length %}
+          <div><dt>Citations</dt><dd>{% for c in step.citations %}{{ c }}{% if not loop.last %} <span class="cite-list__dot" aria-hidden="true">·</span> {% endif %}{% endfor %}</dd></div>
+          {% endif %}
+        </dl>
+      </details>
+      {% endif %}
+      {% for act in step.acts %}
+      <p class="history-node__act">
+        {% for t in act.treatments %}{{ severityBadge(t.severity, t.treatment) }}{% endfor %}
+        <span class="history-node__act-target">{{ act.target }}</span>
+      </p>
+      {% endfor %}
+      {% if step.role == "reported" %}
+      <p class="history-node__flag">
+        {%- if step.acting_case %}Named by the reporting opinion, not matched to a case here
+        {%- else %}Not cited clearly enough to identify the deciding case{% endif -%}
+      </p>
+      {% endif %}
+    </div>
+
+    {# the time axis: when this decision was made, beside its row #}
+    <p class="history-time" style="--row: {{ step.row }}">
+      {%- if step.date_filed %}{{ step.date_filed | replace("-", "/") }}
+      {%- if step.role == "reported" %} <span class="history-time__note">reported</span>{% endif %}
+      {%- else %}<span class="history-time__note">undated</span>{% endif -%}
+    </p>
+
+    {% for link in step.links %}
+    {# the route from the decision before this one in time, below, to this
+       card: an elbow across the connector row, up into this card. What
+       each court did is on its own card, so the elbow carries no label. #}
+    <div class="history-move history-move--{{ link.dir }}"
+         style="--row: {{ link.row }}; --col: {{ link.col_start }}; --col-end: {{ link.col_end }}; --history-inset: {{ 50 / link.span }}%" aria-hidden="true">
+      <span class="history-move__stub history-move__stub--from"></span>
+      <span class="history-move__rail"></span>
+      <span class="history-move__stub history-move__stub--to"></span>
+    </div>
+    {% endfor %}
+    {% endfor %}
+  </div>
+  </div>
+  <ul class="history-key" role="list">
+    <li><span class="history-key__swatch history-key__swatch--self" aria-hidden="true"></span>This opinion</li>
+    <li><span class="history-key__swatch" aria-hidden="true"></span>A decision on the case's record</li>
+    {% if history.has_reported %}
+    <li><span class="history-key__swatch history-key__swatch--reported" aria-hidden="true"></span>Known only from a later opinion's account of it</li>
+    {% endif %}
+  </ul>
+  {% else %}
+  <p class="tab-empty">No appellate history has been identified for this opinion.</p>
+  {% endif %}
+</section>

@@ -1,0 +1,21 @@
+{# A clamped list of citations: the first `limit` entries show, the rest
+   sit behind a "+N" button (composables/list_toggle.js) that expands the
+   enclosing <dd> in place. `dot` separates entries with a middle dot
+   instead of a comma. `noun` names the entries for the button's label. #}
+{% macro citeList(items, limit=3, dot=false, noun="citation") %}
+{%- set extra = (items | length) - limit -%}
+<span class="cite-list">
+{%- for c in items -%}
+  {%- if loop.index <= limit -%}
+    {%- if not loop.first %}{% if dot %} <span class="cite-list__dot" aria-hidden="true">·</span> {% else %}, {% endif %}{% endif -%}{{ c }}
+  {%- else -%}
+    <span class="cite-extra">{% if dot %} <span class="cite-list__dot" aria-hidden="true">·</span> {% else %}, {% endif %}{{ c }}</span>
+  {%- endif -%}
+{%- endfor -%}
+</span>
+{%- if extra > 0 %}
+<button type="button" class="cite-list__more" x-data="listToggle" x-on:click.stop.prevent="toggle"
+        data-more="+{{ extra }}" data-less="less"
+        aria-label="Show {{ extra }} more {{ noun }}{% if extra != 1 %}s{% endif %}">+{{ extra }}</button>
+{%- endif %}
+{% endmacro %}

@@ -14,6 +14,8 @@
     <script defer src="/assets/js/alpine/composables/highlight.js?v={{ build.stamp }}"></script>
     <script defer src="/assets/js/alpine/composables/list_toggle.js?v={{ build.stamp }}"></script>
     <script defer src="/assets/js/alpine/components/back_nav.js?v={{ build.stamp }}"></script>
+    <script defer src="/assets/js/alpine/components/about_hint.js?v={{ build.stamp }}"></script>
+    <script defer src="/assets/js/same_page_links.js?v={{ build.stamp }}"></script>
     {% for s in scripts %}
     <script defer src="{{ s }}?v={{ build.stamp }}"></script>
     {% endfor %}
@@ -28,12 +30,20 @@
       <div class="capped-width px-4 md:px-10 py-4 flex items-center justify-between gap-4">
         <a href="/" class="site-header__wordmark">Citator preview</a>
         <nav class="flex items-center gap-2" aria-label="Site">
-          {% if page.url != "/about/" %}
-          <a href="/about/" class="site-header__link">
-            {{ icon("info", "w-4 h-4") }}
-            About this citator
-          </a>
-          {% endif %}
+          <div x-data="aboutHint" class="about-hint">
+            {% if page.url != "/about/" %}
+            <a href="/about/" class="site-header__link" x-bind:class="hintLinkClass" x-on:click="dismiss">
+              {{ icon("info", "w-4 h-4") }}
+              About this citator
+            </a>
+            <div x-show="open" x-cloak class="about-hint__bubble" role="note">
+              <span>New here? Start with what the preview is and how to read it.</span>
+              <button type="button" class="about-hint__close" x-on:click="dismiss" aria-label="Dismiss">
+                {{ icon("close", "w-3.5 h-3.5") }}
+              </button>
+            </div>
+            {% endif %}
+          </div>
           <a href="/about/#feedback" class="site-header__cta">
             {{ icon("chat", "w-4 h-4") }}
             Share feedback
@@ -41,6 +51,10 @@
         </nav>
       </div>
     </header>
+
+    <p class="desktop-notice md:hidden" role="note">
+      For the best experience, use a desktop.
+    </p>
 
     <main id="main-content" class="capped-width px-4 md:px-10 py-6 flex-1">
       {% if page.url != "/" and backNav != "inline" %}

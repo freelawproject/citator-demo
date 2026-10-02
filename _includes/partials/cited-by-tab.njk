@@ -87,7 +87,7 @@
               {% if cb.is_scoped %}
                 <a href="/opinion/{{ cb.citing_cluster_id }}/" class="citator-row__link" x-on:click.stop>{{ cb.citing_case_name }}</a>
               {% else %}
-                <span class="citator-row__link">{{ cb.citing_case_name }}</span>
+                <span class="citator-row__title">{{ cb.citing_case_name }}</span>
               {% endif %}
 
             </div>

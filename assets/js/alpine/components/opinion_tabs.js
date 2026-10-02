@@ -2,6 +2,10 @@
 Opinion page: the tab bar, the compact case bar, in-page jumps and the
 occurrence navigator for citations in the text.
 
+The selected tab lives in the URL hash. Changing tab adds a history
+entry; moving within a tab replaces it (see assets/js/same_page_links.js
+for plain in-page links).
+
 Markup contract (src/opinion.njk):
   - tab buttons carry data-tab; panels carry data-tab
   - the metadata card is x-ref="caseCard"
@@ -48,16 +52,42 @@ document.addEventListener('alpine:init', () => {
       return this.$el.dataset.tab === this.activeTab;
     },
 
-    showTab(id) {
+    // Switch tab and record it in the URL hash. A change of tab gets its
+    // own history entry, so the browser's Back (and the Back control)
+    // return to the tab the reader was on; a jump within the current tab
+    // only replaces the hash, so Back never stays on the same page for
+    // that. `hash` may name a target inside the tab (an Authorities row,
+    // a writing section) and defaults to the tab itself.
+    enterTab(id, hash = id) {
       if (!VALID_TABS.includes(id)) return;
+      if (id !== this.activeTab) history.pushState(null, '', `#${hash}`);
+      else history.replaceState(null, '', `#${hash}`);
       this.activeTab = id;
-      history.replaceState(null, '', `#${id}`);
+    },
+    showTab(id) {
+      this.enterTab(id);
     },
     selectTab() {
       this.showTab(this.$el.dataset.tab);
     },
-    showOpinionTab() {
-      this.activeTab = 'opinion';
+
+    // the tab a hash lands on, or null when it is not tab-specific
+    tabForHash(hash) {
+      if (VALID_TABS.includes(hash)) return hash;
+      if (hash === 'panel-opinion' || hash.startsWith('section-') || hash.startsWith('q=')) return 'opinion';
+      if (hash.startsWith('authority-')) return 'authorities';
+      return null;
+    },
+
+    // an in-page link that lands on another tab records the tab change
+    // before same_page_links.js scrolls to the target (citations in the
+    // text are handled by onCitationClick instead)
+    onHashLinkClick(event) {
+      const link = event.target.closest('a[href^="#"]');
+      if (!link || link.matches('a.cited-case-wrap')) return;
+      const hash = link.getAttribute('href').slice(1);
+      const tab = this.tabForHash(hash);
+      if (tab && tab !== this.activeTab) this.enterTab(tab, hash);
     },
 
     onKeydown(event) {
@@ -209,7 +239,7 @@ document.addEventListener('alpine:init', () => {
     },
     occToRow() {
       const hash = `authority-${this.occNav.n}`;
-      history.replaceState(null, '', `#${hash}`);
+      this.enterTab('authorities', hash);
       this.handleHash(hash);
     },
     occClose() {
@@ -222,7 +252,7 @@ document.addEventListener('alpine:init', () => {
     // first, then only its opening words, so an earlier sentence that
     // merely starts the same way never wins over the exact one.
     flashQuoteInBody(quote) {
-      this.activeTab = 'opinion';
+      this.enterTab('opinion');
       this.$nextTick(() => {
         const body = this.pageRoot.querySelector('.opinion-body');
         if (!body) return;
@@ -248,6 +278,7 @@ document.addEventListener('alpine:init', () => {
       if (hash) this.handleHash(hash);
       window.addEventListener('hashchange', () => this.handleHash(window.location.hash.slice(1)));
       this.$root.addEventListener('click', (e) => this.onCitationClick(e));
+      this.$root.addEventListener('click', (e) => this.onHashLinkClick(e));
       this.watchCaseCard();
     },
   }));

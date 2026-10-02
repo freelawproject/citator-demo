@@ -76,6 +76,29 @@
   .site-header__link {
     @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-greyscale-700 no-underline transition hover:bg-primary-50 hover:text-primary-700;
   }
+  /* first-visit hint on the About link (components/about_hint.js) */
+  .about-hint {
+    @apply relative;
+  }
+  .about-hint__link--active {
+    @apply bg-primary-50 text-primary-700 ring-2 ring-primary-300;
+  }
+  .about-hint__bubble {
+    @apply absolute right-0 top-full z-20 mt-3 flex w-64 items-start gap-2 rounded-lg bg-greyscale-900 px-3 py-2 text-xs leading-relaxed text-white shadow-lg;
+  }
+  .about-hint__bubble::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    right: 24px;
+    width: 12px;
+    height: 12px;
+    background: theme('colors.greyscale.900');
+    transform: rotate(45deg);
+  }
+  .about-hint__close {
+    @apply -mr-1 -mt-0.5 flex-shrink-0 rounded p-1 text-greyscale-300 transition hover:bg-greyscale-700 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
   .site-header__cta {
     @apply inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white no-underline transition hover:bg-primary-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300;
   }
@@ -808,6 +831,11 @@
   .citator-row__name {
     @apply min-w-0 pt-0.5 text-sm;
   }
+  /* the case name: a link when the preview has the opinion's page, plain
+     text otherwise, so only the link gets a hover */
+  .citator-row__title {
+    @apply font-semibold text-greyscale-900;
+  }
   .citator-row__link {
     @apply font-semibold text-greyscale-900 hover:text-primary-700 hover:underline;
   }
@@ -1230,8 +1258,20 @@
   .about-table__list--icons svg {
     @apply mt-0.5 flex-shrink-0;
   }
+  .about-notice {
+    @apply mt-5 rounded-lg border-l-4 border-yellow-400 bg-yellow-50 px-4 py-3 text-sm leading-relaxed text-greyscale-700;
+  }
+  .desktop-notice {
+    @apply m-0 border-b border-yellow-400 bg-yellow-50 px-4 py-2 text-center text-xs leading-relaxed text-greyscale-700;
+  }
+  .start-panel {
+    @apply mt-16 rounded-2xl border border-greyscale-200 bg-white px-6 py-8 text-center shadow-sm md:px-10 md:py-10;
+  }
+  .start-panel__button {
+    @apply mt-6 inline-flex items-center gap-2 rounded-md bg-primary-600 px-5 py-2.5 text-base font-semibold text-white no-underline transition hover:bg-primary-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300;
+  }
   .feedback-panel {
-    @apply mt-16 rounded-2xl border-l-4 border-primary-500 bg-primary-50 px-6 py-8 shadow-sm scroll-mt-6 md:px-10 md:py-10;
+    @apply mt-10 rounded-2xl border-l-4 border-primary-500 bg-primary-50 px-6 py-8 shadow-sm scroll-mt-6 md:px-10 md:py-10;
   }
   .feedback-card {
     @apply flex flex-col gap-1 rounded-xl border border-primary-200 bg-white px-6 py-5 no-underline transition hover:border-primary-500 hover:shadow-md focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300;

@@ -8,7 +8,7 @@ permalink: /about/
    _data/treatments.json so it cannot drift from the taxonomy. #}
 {% from "macros/treatment.njk" import severityBadge %}
 {% from "macros/icons.njk" import icon %}
-{% set FORM_BASE = "https://forms.gle/PLACEHOLDER" %}
+{% set FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfUjYrLNcfBMNeXV6wviUF9jD1pMw_dRADiKGya2idl--vhwg/viewform?usp=header" %}
 
 <article class="prose-about">
 
@@ -19,6 +19,9 @@ permalink: /about/
       <a href="https://free.law/" class="links" target="_blank" rel="noopener">Free Law Project</a>.
       This page explains what the preview covers, how to read it, and
       <a href="#feedback" class="links">where your feedback helps most</a>.
+    </p>
+    <p class="about-notice">
+      <strong>For the best experience, use a desktop.</strong> The preview is designed for larger screens.
     </p>
   </header>
 
@@ -237,22 +240,29 @@ permalink: /about/
     </div>
   </section>
 
+  <section class="start-panel" aria-labelledby="get-started">
+    <h2 id="get-started" class="text-display-sm font-semibold text-greyscale-900 leading-tight">Ready to try it?</h2>
+    <p class="mt-3 text-md text-greyscale-700 leading-relaxed">
+      Open an anchor opinion and work through its tabs.
+    </p>
+    <a href="/" class="start-panel__button">
+      Get started
+      {{ icon("arrow-right", "w-4 h-4") }}
+    </a>
+  </section>
+
   <section id="feedback" class="feedback-panel">
     <h2 class="text-display-sm font-semibold text-greyscale-900 leading-tight">Share your feedback</h2>
     <p class="mt-3 text-md text-greyscale-700 leading-relaxed">
       We want your honest feedback — what's confusing, what's missing, what's wrong.
     </p>
     <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
-      Two forms below — pick the one that best matches your background.
+      One short form for everyone. If you are a legal professional, also tell us about the treatments and how this compares with the citators you use today. For the best experience, use the preview on a desktop.
     </p>
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
-      <a href="{{ FORM_BASE }}?audience=general" target="_blank" rel="noopener" class="feedback-card">
-        <span class="feedback-card__title">General user feedback →</span>
-        <span class="feedback-card__text">How the pages read and how easy they are to move around. No legal background needed.</span>
-      </a>
-      <a href="{{ FORM_BASE }}?audience=expert" target="_blank" rel="noopener" class="feedback-card">
-        <span class="feedback-card__title">Legal professional feedback →</span>
-        <span class="feedback-card__text">Whether you would use this before relying on a case, whether each treatment shows you enough to form your own view, and how it compares with the citators you use today.</span>
+      <a href="{{ FORM_URL }}" target="_blank" rel="noopener" class="feedback-card">
+        <span class="feedback-card__title">Open the feedback form →</span>
+        <span class="feedback-card__text">About five minutes; ten with the legal professional section.</span>
       </a>
     </div>
   </section>

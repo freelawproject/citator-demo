@@ -73,7 +73,10 @@ _includes/
 src/                    pages: index, opinion, about
 assets/
   css/styles.css        Tailwind input
-  js/alpine/components/ one component per page or list
+  js/same_page_links.js in-page links replace the history entry
+                        instead of adding one
+  js/alpine/components/ one component per page or list, plus the
+                        Back control and the first-visit About hint
   js/alpine/composables/ shared Alpine behaviour (list toggle, highlight)
 scripts/
   build_data.py         entry point: data source → _data/*.json
@@ -159,8 +162,17 @@ The build writes `_data/opinions/{cluster_id}.json` (one per page),
   applied and recognized treatments, as a union) and History (the case's
   route through the courts: court levels along the bottom, time up the
   side).
-- **About** explains the preview and the taxonomy; its counts come from
+- **About** explains the preview and the taxonomy, then ends with a
+  Get started link and the feedback form; its counts come from
   `scope.json`.
+
+Every page carries a desktop notice below the header on small screens,
+and the header's About link shows a one-time hint until it is followed,
+dismissed, or the About page is opened (remembered in localStorage).
+On an opinion page, changing tab adds a history entry and a jump within
+a tab replaces it, so the browser's Back button and the site's Back
+control both step back through the tabs visited and then to the
+previous page, on the tab it was left on.
 
 ## Continuous integration
 

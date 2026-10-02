@@ -194,12 +194,13 @@ npx netlify-cli link
 
 # publish: stop any running `npm run dev` first, then build and upload
 npm run build
-npx netlify-cli deploy --prod --dir=_site
+npx netlify-cli deploy --prod --dir=_site --no-build
 ```
 
 Run both commands from the project root. The link is stored in
-`.netlify/` (gitignored). Dropping `--prod` uploads a preview at a
-unique URL without replacing the live site. A running dev server
+`.netlify/` (gitignored). `--no-build` stops the CLI from running the
+site's build command a second time. Dropping `--prod` uploads a preview
+at a unique URL without replacing the live site. A running dev server
 rewrites `_site/` from its own cached state, so it must be stopped
 before the build that gets published.
 

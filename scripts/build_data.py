@@ -11,6 +11,7 @@ CITATOR_DEMO_DATA=mock) and writes to `_data/`:
     court_picker.json           the home page's court picker
     court_categories.json, court_jurisdictions.json
     treatments.json             the treatment taxonomy by severity tier
+    treatment_definitions.json  every pill label → its definition
 
 The data source's `edges` are the single record of treatments. The Cited
 By tab of a cited opinion is derived from them; the Authorities tab of a
@@ -46,6 +47,7 @@ from taxonomy import (
     NEGATIVE_TIERS,
     VERTICAL_OR_SELF_TREATMENTS,
     base_treatment,
+    definition_lookup,
     direction_for,
     is_recognized,
     past_tense,
@@ -836,6 +838,7 @@ def write_site(ds: DataSource, out_dir: Path = OUT_DIR) -> JsonDict:
         ],
     )
     _write(out_dir / "treatments.json", treatment_table())
+    _write(out_dir / "treatment_definitions.json", definition_lookup())
 
     print(
         f"Wrote {len(pages)} opinion pages and {len(entries)} index entries to {out_dir}"

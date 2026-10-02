@@ -3,7 +3,9 @@ from __future__ import annotations
 import pytest
 
 from taxonomy import (
+    DEFINITIONS,
     SEVERITY_BY_TREATMENT,
+    definition_lookup,
     direction_for,
     recognizes_label,
     row_validation,
@@ -119,6 +121,31 @@ def test_row_validation_precedence() -> None:
     assert row_validation(["unverified", "disagree", "agree"]) == "disagree"
     assert row_validation(["unverified", "agree"]) == "agree"
     assert row_validation(["unverified"]) == "unverified"
+
+
+def test_every_treatment_has_a_definition() -> None:
+    assert sorted(DEFINITIONS) == sorted(SEVERITY_BY_TREATMENT)
+
+
+def test_definition_lookup_covers_every_pill_form() -> None:
+    lookup = definition_lookup()
+    overruled = DEFINITIONS["Overruled by"]
+    assert lookup["Overruled by"] == overruled
+    assert lookup["Overrules"] == overruled
+    assert lookup["Overruled"] == overruled
+    recognized = (
+        "The citing case notes that the acting case expressly overrules "
+        "all or part of the target case."
+    )
+    assert lookup["Overruled as recognized by"] == recognized
+    assert lookup["Recognizes to be overruled"] == recognized
+    assert lookup["Reversed as recognized by"].startswith(
+        "The citing case notes that on direct appeal, the acting case"
+    )
+    for plain in ("Cited by", "Cites", "Cited", "Cited as recognized by"):
+        assert plain not in lookup
+    assert lookup["Granted cert."] == DEFINITIONS["Cert. granted by"]
+    assert "Ordered" not in lookup
 
 
 def test_treatment_table_covers_every_label_once() -> None:

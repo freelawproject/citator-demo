@@ -103,6 +103,115 @@ ACTIVE_VOICE: dict[str, str] = {
 
 RECOGNIZED_SUFFIX = " as recognized by"
 
+# What each treatment means, shown when a pill is hovered or focused.
+# "Acting case" is the opinion applying the treatment, "target case" the
+# one receiving it; the About page says so above the treatment table.
+DEFINITIONS: dict[str, str] = {
+    # Direct History
+    "Reversed by": (
+        "On direct appeal, the acting case reverses the target court's "
+        "decision."
+    ),
+    "Reversed and remanded by": (
+        "On direct appeal, the acting case reverses the target court's "
+        "decision and sends the case back to the target court for "
+        "further proceedings."
+    ),
+    "Vacated and remanded by": (
+        "On direct appeal, the acting case sets aside the target court's "
+        "decision, leaving it without legal effect, and sends the case "
+        "back to the target court for further proceedings."
+    ),
+    "Vacated by": (
+        "On direct appeal, the acting case sets aside the target court's "
+        "decision, leaving it without legal effect."
+    ),
+    "Affirmed in part; Reversed in part by": (
+        "On direct appeal, the acting case affirms part of the target "
+        "case while reversing other parts of it."
+    ),
+    "Affirmed in part; Vacated in part by": (
+        "On direct appeal, the acting case affirms part of the target "
+        "case while vacating other parts of it."
+    ),
+    "Remanded by": (
+        "On direct appeal, the acting case sends the case back to the "
+        "target court for further proceedings."
+    ),
+    "Cert. granted by": (
+        "On a petition for review, the acting case agrees to hear an "
+        "appeal of the target case."
+    ),
+    "Dismissed by": (
+        "On direct appeal, the acting case ends the appeal without "
+        "deciding its merits."
+    ),
+    "Affirmed by": (
+        "On direct appeal, the acting case affirms the target court's "
+        "decision."
+    ),
+    "Cert. denied by": (
+        "On a petition for review, the acting case refuses to hear an "
+        "appeal of the target case."
+    ),
+    # Citing Reference
+    "Overruled by": (
+        "The acting case expressly overrules all or part of the target case."
+    ),
+    "Abrogated by": (
+        "The acting case effectively, but not explicitly, overrules all "
+        "or part of the target case."
+    ),
+    "Questioned by": (
+        "The acting case questions the continuing validity or "
+        "precedential value of the target case, either because another "
+        "decision implicitly undermines it or because of intervening "
+        "events such as judicial or legislative overruling."
+    ),
+    "Disapproved by": (
+        "The acting case expressly or implicitly disapproves all or part "
+        "of the target case for its reasoning or result and reaches a "
+        "contrary holding, but does not overrule it."
+    ),
+    "Limited by": (
+        "The acting case narrows the scope or applicability of the "
+        "target case rather than extending it or accepting it as "
+        "authoritative."
+    ),
+    "Criticized by": (
+        "The acting case criticizes all or part of the target case's "
+        "reasoning but, unlike Disapproved, does not reach a contrary "
+        "holding, or the criticism is dicta."
+    ),
+    "Distinguished by": (
+        "The acting case reaches a different result because its facts, "
+        "procedural posture or law differ from the target case's. "
+        "Sometimes also called declined to extend."
+    ),
+    "Declined to follow by": (
+        "The acting case chooses not to apply the reasoning or ruling of "
+        "the target case, and no more specific treatment applies."
+    ),
+    "Cited by": (
+        "The acting case cites, references, discusses, interprets, "
+        "clarifies or explains the target case without treating it "
+        "negatively."
+    ),
+}
+
+# Labels whose pills show no definition: a plain citation needs none.
+NO_TOOLTIP = frozenset({"Cited by"})
+
+# Related Reference: the "X as recognized by" form of any label opens
+# with this and continues with the root treatment's definition.
+RECOGNIZED_PREFIX = "The citing case notes that "
+
+
+def recognized_definition(text: str) -> str:
+    """ "The acting case overrules…" → "The citing case notes that the
+    acting case overrules…"."""
+    return RECOGNIZED_PREFIX + text[:1].lower() + text[1:]
+
 
 def is_recognized(treatment: str) -> bool:
     """Whether the label is the "X as recognized by" form."""
@@ -228,6 +337,25 @@ def row_validation(states: list[str]) -> str:
     if "agree" in states:
         return "agree"
     return "unverified"
+
+
+def definition_lookup() -> dict[str, str]:
+    """Every display form of each label, mapped to its definition, for
+    the pills' tooltips: passive ("Overruled by"), active ("Overrules"),
+    past tense ("Overruled") and both recognized forms ("Overruled as
+    recognized by", "Recognizes to be overruled"). Labels in NO_TOOLTIP
+    are left out in every form."""
+    lookup: dict[str, str] = {}
+    for label, text in DEFINITIONS.items():
+        if label in NO_TOOLTIP:
+            continue
+        lookup[label] = text
+        lookup[to_active_voice(label)] = text
+        lookup[past_tense(label)] = text
+        recognized = recognized_definition(text)
+        lookup[recognized_form(label)] = recognized
+        lookup[recognizes_label(label)] = recognized
+    return lookup
 
 
 def treatment_table() -> list[dict[str, Any]]:

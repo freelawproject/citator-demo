@@ -1,11 +1,13 @@
 {# Treatment indicators.
-   - severityBadge(severity, label, small=false): the pill every treatment
-     renders as; `small` is the filter menus' size.
+   - severityBadge(severity, label, small=false, definition=""): the pill
+     every treatment renders as; `small` is the filter menus' size. With
+     a `definition` (treatment_definitions[label], global data that a
+     macro cannot read itself) the pill shows it on hover and focus.
    - validationDot(state, expert_treatment): the expert-validation mark
      beside a pill; only rendered when the `validation` build flag is on. #}
 {% from "macros/icons.njk" import icon %}
 
-{% macro severityBadge(severity, label, small=false) %}
+{% macro severityBadge(severity, label, small=false, definition="") %}
   {%- if severity == "Stop" -%}
     {%- set variant = "severity-badge--stop" -%}{%- set glyph = "severity-stop" -%}
   {%- elif severity == "Warning" -%}
@@ -19,7 +21,7 @@
   {%- else -%}
     {%- set variant = "severity-badge--neutral" -%}{%- set glyph = "severity-neutral" -%}
   {%- endif -%}
-  <span class="severity-badge {{ variant }}{% if small %} severity-badge--small{% endif %}">{{ icon(glyph, "severity-badge__icon") }}<span class="severity-badge__label">{{ label }}</span></span>
+  <span class="severity-badge {{ variant }}{% if small %} severity-badge--small{% endif %}{% if definition %} tooltip-target severity-badge--defined" data-tooltip="{{ definition }}" tabindex="0{% endif %}">{{ icon(glyph, "severity-badge__icon") }}<span class="severity-badge__label">{{ label }}</span></span>
 {% endmacro %}
 
 {% macro validationDot(state, expert_treatment="") %}

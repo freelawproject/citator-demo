@@ -71,13 +71,14 @@
           <div class="citator-row__treatment">
             {% for p in cb.applied %}
             <span>
-              {{ severityBadge(p.severity, p.treatment) }}
+              {{ severityBadge(p.severity, p.treatment, false, treatment_definitions[p.treatment]) }}
               {% if flags.validation %}{{ validationDot(p.validation, p.expert_treatment) }}{% endif %}
             </span>
             {% endfor %}
             {% for p in cb.recognized %}
-            <span title="{{ p.treatment_past }} as recognized by {{ cb.citing_case_name }}">
-              {{ severityBadge(p.severity, p.treatment_past ~ " as recognized by") }}
+            {% set recognizedLabel = p.treatment_past ~ " as recognized by" %}
+            <span>
+              {{ severityBadge(p.severity, recognizedLabel, false, treatment_definitions[recognizedLabel]) }}
               {% if flags.validation %}{{ validationDot(p.validation, p.expert_treatment) }}{% endif %}
             </span>
             {% endfor %}
@@ -118,9 +119,9 @@
               {# the citing opinion's own Authorities row for this case, or
                  the passage itself when its authorities were never extracted #}
               {% set href = "/opinion/" ~ cb.citing_cluster_id ~ "/" ~ ("#authority-" ~ cb.citing_authority_n if cb.citing_authority_n else "#q=" ~ (c.quote | urlencode)) %}
-              {{ evidenceCard(c, "the citing opinion", href, "See it in the citing opinion") }}
+              {{ evidenceCard(c, treatment_definitions, "the citing opinion", href, "See it in the citing opinion") }}
             {% else %}
-              {{ evidenceCard(c, "the citing opinion", "", "", false) }}
+              {{ evidenceCard(c, treatment_definitions, "the citing opinion", "", "", false) }}
             {% endif %}
           {% endfor %}
         </div>

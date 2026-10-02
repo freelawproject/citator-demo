@@ -11,6 +11,7 @@ CITATOR_DEMO_DATA=mock) and writes to `_data/`:
     court_picker.json           the home page's court picker
     court_categories.json, court_jurisdictions.json
     treatments.json             the treatment taxonomy by severity tier
+    treatment_definitions.json  every pill label → its definition
 
 The data source's `edges` are the single record of treatments. The Cited
 By tab of a cited opinion is derived from them; the Authorities tab of a
@@ -46,7 +47,9 @@ from taxonomy import (
     NEGATIVE_TIERS,
     VERTICAL_OR_SELF_TREATMENTS,
     base_treatment,
+    definition_lookup,
     direction_for,
+    has_evidence,
     is_recognized,
     past_tense,
     recognized_form,
@@ -184,6 +187,7 @@ def _pill(kind: str, row: JsonDict) -> JsonDict:
 def _evidence_card(pill: JsonDict, label: str) -> JsonDict:
     evidence = pill["evidence"]
     return {
+        "treatment": pill["treatment"],
         "label": label,
         "severity": pill["severity"],
         "rationale": evidence.get("rationale", ""),
@@ -193,13 +197,24 @@ def _evidence_card(pill: JsonDict, label: str) -> JsonDict:
     }
 
 
+def select_evidence_cards(cards: list[JsonDict]) -> list[JsonDict]:
+    """The cards a row presents: one per treatment other than a plain
+    citation (taxonomy.has_evidence). Both tabs use this."""
+    return [c for c in cards if has_evidence(c["treatment"])]
+
+
+def has_detail(cards: list[JsonDict]) -> bool:
+    """Whether a row expands: it has a card with something to show."""
+    return any(c["quote"] or c["rationale"] for c in cards)
+
+
 def group_cited_by(rows: list[JsonDict]) -> list[JsonDict]:
     """One row per citing opinion, however many treatments it applied.
 
     The row carries the treatment the citing opinion applied itself, the
     ones it recognizes other courts applied, one evidence card per
-    negative treatment, and the worst severity of them all, which is what
-    the severity filter and the sort see.
+    treatment other than a plain citation, and the worst severity of them
+    all, which is what the severity filter and the sort see.
     """
     grouped: dict[int, JsonDict] = {}
     for row in rows:
@@ -247,12 +262,8 @@ def group_cited_by(rows: list[JsonDict]) -> list[JsonDict]:
             _evidence_card(p, p["treatment"])
             for p in head["applied"] + head["recognized"]
         ]
-        head["evidence_cards"] = [
-            c for c in cards if c["severity"] in NEGATIVE_TIERS
-        ]
-        head["has_detail"] = any(
-            c["quote"] or c["rationale"] for c in head["evidence_cards"]
-        )
+        head["evidence_cards"] = select_evidence_cards(cards)
+        head["has_detail"] = has_detail(head["evidence_cards"])
         # what the status rows quote: the leading treatment's evidence
         head["evidence"] = cards[0] if cards else {}
         out.append(head)
@@ -464,7 +475,7 @@ class SiteBuilder:
                 "quote_status": quote_status,
                 "quote_names": quote_names,
             },
-            "has_detail": bool(quote or rationale) and treatment != "Cited by",
+            "has_detail": bool(quote or rationale) and has_evidence(treatment),
             "row_id": f"cb-{edge_idx}",
             "citing_cluster_id": citing["cluster_id"],
             # the citing opinion's Authorities row for this case
@@ -518,7 +529,6 @@ class SiteBuilder:
         ]
         recognized.sort(key=lambda x: severity_rank(x.get("severity")))
         recognized_tiers = [x.get("severity") or "Neutral" for x in recognized]
-        applied_detail = treatment != "Cited by"
         row = {
             **group,
             "treatment": treatment,
@@ -535,16 +545,7 @@ class SiteBuilder:
             "recognized": recognized,
             "appearance_index": group["n"] - 1,
             "row_id": f"auth-{group['n']}",
-            # a merely-cited authority has nothing to explain; its row
-            # expands only for treatments it recognizes from other courts
-            "has_detail": bool(
-                recognized
-                or (
-                    applied_detail
-                    and (group.get("quote") or group.get("rationale"))
-                )
-            ),
-            "show_applied_detail": applied_detail,
+            # has_detail and evidence_cards are set by _cited_authorities
             "recognized_severity": worst_tier(recognized_tiers),
             "recognized_filter": worst_tier(recognized_tiers, default="none"),
         }
@@ -558,30 +559,31 @@ class SiteBuilder:
     ) -> list[JsonDict]:
         """Evidence cards for an expanded Authorities row: this opinion's
         own treatment first, then each treatment it recognizes, by
-        severity within each; every quote checked against the text."""
-        cards: list[JsonDict] = []
-        if row["show_applied_detail"]:
-            direct = row["treatment"] in DIRECT_HISTORY_TREATMENTS
-            cards.append(
-                {
-                    "order": 0 if direct else 1,
-                    "severity": row.get("severity") or "Neutral",
-                    "label": row["treatment_active"],
-                    "other_label": row.get("treatment_other_label") or "",
-                    "rationale": row.get("rationale") or "",
-                    "quote": row.get("quote") or "",
-                }
-            )
+        severity within each; every quote checked against the text. The
+        same rule as the Cited By tab picks which cards are shown
+        (select_evidence_cards)."""
+        direct = row["treatment"] in DIRECT_HISTORY_TREATMENTS
+        applied_shown = has_evidence(row["treatment"])
+        cards: list[JsonDict] = [
+            {
+                "treatment": row["treatment"],
+                "order": 0 if direct else 1,
+                "severity": row.get("severity") or "Neutral",
+                "label": row["treatment_active"],
+                "other_label": row.get("treatment_other_label") or "",
+                "rationale": row.get("rationale") or "",
+                "quote": row.get("quote") or "",
+            }
+        ]
         for i, x in enumerate(row["recognized"]):
             # a recognition without its own rationale borrows the row's,
             # which on a merely-cited row explains the recognition
             borrowed = (
-                row.get("rationale")
-                if (i == 0 and not row["show_applied_detail"])
-                else ""
+                row.get("rationale") if (i == 0 and not applied_shown) else ""
             )
             cards.append(
                 {
+                    "treatment": recognized_form(x.get("treatment") or ""),
                     "order": 2,
                     "severity": x.get("severity") or "Neutral",
                     "label": recognizes_label(x.get("treatment") or ""),
@@ -590,6 +592,7 @@ class SiteBuilder:
                     "quote": x.get("quote") or "",
                 }
             )
+        cards = select_evidence_cards(cards)
         cards.sort(key=lambda c: (c["order"], severity_rank(c["severity"])))
         cites = list(row.get("cited_as") or []) + list(
             row.get("citations") or []
@@ -647,6 +650,7 @@ class SiteBuilder:
         ]
         for row in rows:
             row["evidence_cards"] = self._authority_cards(row, streams)
+            row["has_detail"] = has_detail(row["evidence_cards"])
             self._validate_authority_row(row)
         rows.sort(
             key=lambda r: (
@@ -836,6 +840,7 @@ def write_site(ds: DataSource, out_dir: Path = OUT_DIR) -> JsonDict:
         ],
     )
     _write(out_dir / "treatments.json", treatment_table())
+    _write(out_dir / "treatment_definitions.json", definition_lookup())
 
     print(
         f"Wrote {len(pages)} opinion pages and {len(entries)} index entries to {out_dir}"

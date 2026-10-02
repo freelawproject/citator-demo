@@ -113,14 +113,17 @@ are the edges where it is the cited side, in the passive ("Distinguished
 by"); the mention count is the same number on both. A treatment a citing
 opinion only reports another court applying is the "as recognized by"
 form and keeps that treatment's severity. The Cited By tab lists one row
-per citing opinion, however many treatments run between the two, with
-one evidence card per negative treatment. The citing-scope CSVs say
-which citing opinions were fetched for each anchor; they create no rows.
+per citing opinion, however many treatments run between the two. On
+both tabs every treatment other than a plain "Cited by", applied or
+recognized, gets an evidence card with its rationale and quote; the
+rule and the card are shared (`taxonomy.has_evidence`,
+`macros/evidence.njk`). The citing-scope CSVs say which citing opinions
+were fetched for each anchor; they create no rows.
 
 Treatments roll up into five severity tiers, most serious first: Stop,
 Warning, Caution, Neutral and Positive (an affirmance). The first three
-are the negative tiers; only they produce evidence cards, text markers
-and expert-disagreement marks (`scripts/taxonomy.py`). An opinion's own
+are the negative tiers; only they produce text markers and
+expert-disagreement marks (`scripts/taxonomy.py`). An opinion's own
 disposition renders in the past tense as the court states it; one the
 taxonomy has no label for renders as "Ordered" and opens the sentence
 that disposed of the case.
@@ -146,7 +149,9 @@ An opinion payload holds `cluster_id`, `case_name`, `docket_number`,
 The build writes `_data/opinions/{cluster_id}.json` (one per page),
 `index.json` (the home list), `scope.json` (counts for the About page),
 `flags.json`, `courts.json`, `court_picker.json`, `court_categories.json`,
-`court_jurisdictions.json` and `treatments.json` (the taxonomy table).
+`court_jurisdictions.json`, `treatments.json` (the taxonomy table) and
+`treatment_definitions.json` (every pill label mapped to its
+definition, shown on hover and focus).
 
 ## Pages
 

@@ -62,7 +62,7 @@
           <div class="citator-row__name">
             {# the name goes to the authority's own page, when the site has one #}
             {% if a.page_url %}<a href="{{ a.page_url }}" x-on:click.stop class="citator-row__link" title="Open this opinion">{{ a.name }}</a>
-            {% else %}<span class="citator-row__link">{{ a.name }}</span>{% endif %}
+            {% else %}<span class="citator-row__title">{{ a.name }}</span>{% endif %}
 
           </div>
           <p class="citator-row__meta">

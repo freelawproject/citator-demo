@@ -1,7 +1,8 @@
 {# One evidence card inside an expanded treatment row: the pill, the
    rationale, the quote with its status line, and a way to the passage.
    `card` has label, severity, rationale, quote, quote_status, quote_names
-   and optionally other_label. `where` names the text the quote comes from
+   and optionally other_label. `defs` is the page's treatment_definitions
+   data, for the pill's tooltip. `where` names the text the quote comes from
    ("the opinion" or "the citing opinion"). With `href` the passage link is
    an anchor to another page; without it the card renders the
    "Read in the opinion" button (opinion_tabs.readQuote); with
@@ -9,10 +10,10 @@
 {% from "macros/treatment.njk" import severityBadge %}
 {% from "macros/icons.njk" import icon %}
 
-{% macro evidenceCard(card, where="the opinion", href="", href_label="", linkable=true) %}
+{% macro evidenceCard(card, defs, where="the opinion", href="", href_label="", linkable=true) %}
 <article class="evidence-card">
   <div class="evidence-card__head">
-    {{ severityBadge(card.severity, card.label) }}
+    {{ severityBadge(card.severity, card.label, false, defs[card.label]) }}
     {% if card.other_label %}<span class="evidence-card__other">{{ card.other_label }}</span>{% endif %}
   </div>
   {% if card.rationale %}<p class="evidence-card__rationale">{{ card.rationale }}</p>{% endif %}

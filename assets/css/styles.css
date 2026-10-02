@@ -226,6 +226,18 @@
   .severity-badge--small {
     @apply px-1.5 text-[0.625rem] leading-4;
   }
+  /* a pill with a definition: the tooltip opens from its left edge, since
+     pills sit at the left of their rows */
+  .severity-badge--defined {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
+  .severity-badge--defined::after {
+    left: 0;
+    right: auto;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 400;
+  }
   .severity-badge--small .severity-badge__icon {
     @apply h-2.5 w-2.5;
   }

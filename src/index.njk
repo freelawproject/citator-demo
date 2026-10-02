@@ -113,7 +113,7 @@ scripts:
               {% endif %}
             </dl>
           </div>
-          {{ statusRows(case.status, case.disposition, "", true) }}
+          {{ statusRows(case.status, case.disposition, treatment_definitions, "", true) }}
           {% if case.excerpt %}
           <p class="home-snippet">{{ case.excerpt }}</p>
           {% endif %}

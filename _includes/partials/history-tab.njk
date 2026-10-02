@@ -52,7 +52,7 @@
       {% endif %}
       {% for act in step.acts %}
       <p class="history-node__act">
-        {% for t in act.treatments %}{{ severityBadge(t.severity, t.treatment) }}{% endfor %}
+        {% for t in act.treatments %}{{ severityBadge(t.severity, t.treatment, false, treatment_definitions[t.treatment]) }}{% endfor %}
         <span class="history-node__act-target">{{ act.target }}</span>
       </p>
       {% endfor %}

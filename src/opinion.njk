@@ -71,7 +71,7 @@ eleventyComputed:
       </dl>
     </header>
     <section id="treatment-summary" aria-label="Status of this opinion">
-      {{ statusRows(opinion.status, opinion.disposition, "opinion-status") }}
+      {{ statusRows(opinion.status, opinion.disposition, treatment_definitions, "opinion-status") }}
     </section>
   </div>
 

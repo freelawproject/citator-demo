@@ -146,7 +146,9 @@ An opinion payload holds `cluster_id`, `case_name`, `docket_number`,
 The build writes `_data/opinions/{cluster_id}.json` (one per page),
 `index.json` (the home list), `scope.json` (counts for the About page),
 `flags.json`, `courts.json`, `court_picker.json`, `court_categories.json`,
-`court_jurisdictions.json` and `treatments.json` (the taxonomy table).
+`court_jurisdictions.json`, `treatments.json` (the taxonomy table) and
+`treatment_definitions.json` (every pill label mapped to its
+definition, shown on hover and focus).
 
 ## Pages
 

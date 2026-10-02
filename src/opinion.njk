@@ -37,10 +37,10 @@ eleventyComputed:
         <li><a href="#treatment-summary" class="jump-links__link">Status</a></li>
         {% if opinion.document.sections | length > 1 %}
           {% for s in opinion.document.sections %}
-          <li><a href="#{{ s.anchor }}" class="jump-links__link" x-on:click="showOpinionTab">{{ s.title }}</a></li>
+          <li><a href="#{{ s.anchor }}" class="jump-links__link">{{ s.title }}</a></li>
           {% endfor %}
         {% else %}
-          <li><a href="#panel-opinion" class="jump-links__link" x-on:click="showOpinionTab">Opinion</a></li>
+          <li><a href="#panel-opinion" class="jump-links__link">Opinion</a></li>
         {% endif %}
       </ul>
     </nav>

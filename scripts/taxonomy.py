@@ -199,8 +199,18 @@ DEFINITIONS: dict[str, str] = {
     ),
 }
 
-# Labels whose pills show no definition: a plain citation needs none.
-NO_TOOLTIP = frozenset({"Cited by"})
+# A plain citation: its pill shows no definition and its row no
+# evidence card. Every other treatment shows both.
+PLAIN_CITATION = "Cited by"
+NO_TOOLTIP = frozenset({PLAIN_CITATION})
+
+
+def has_evidence(treatment: str) -> bool:
+    """Whether a treatment's rationale and quote are presented, in either
+    form: every treatment but a plain citation. The Authorities and Cited
+    By tabs share this rule."""
+    return base_treatment(treatment) != PLAIN_CITATION
+
 
 # Related Reference: the "X as recognized by" form of any label opens
 # with this and continues with the root treatment's definition.

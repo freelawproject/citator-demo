@@ -29,6 +29,7 @@ def row(citing: int, treatment: str, date: str, **extra: object) -> dict:
         "treatment": treatment,
         "severity": {
             "Cited by": "Neutral",
+            "Cert. denied as recognized by": "Neutral",
             "Distinguished by": "Caution",
             "Overruled as recognized by": "Stop",
             "Affirmed by": "Positive",
@@ -59,12 +60,31 @@ def test_group_cited_by_merges_one_citing_opinion() -> None:
     assert one["severity"] == "Stop"
     assert [p["treatment_past"] for p in one["recognized"]] == ["Overruled"]
     assert one["recognized_filter"] == "Stop"
-    # only negative treatments get an evidence card
+    # every treatment but the plain citation gets an evidence card
     assert [c["label"] for c in one["evidence_cards"]] == [
         "Overruled as recognized by"
     ]
     assert grouped[2]["recognized_filter"] == "none"
     assert grouped[2]["has_detail"] is True
+
+
+def test_cited_by_cards_cover_neutral_and_positive_acts() -> None:
+    rows = [
+        row(1, "Cited by", "2020-01-01"),
+        row(1, "Cert. denied as recognized by", "2020-01-01"),
+        row(2, "Affirmed by", "2020-01-01"),
+        row(3, "Cited by", "2020-01-01"),
+    ]
+    grouped = {g["citing_cluster_id"]: g for g in group_cited_by(rows)}
+    assert [c["label"] for c in grouped[1]["evidence_cards"]] == [
+        "Cert. denied as recognized by"
+    ]
+    assert grouped[1]["has_detail"] is True
+    assert [c["label"] for c in grouped[2]["evidence_cards"]] == [
+        "Affirmed by"
+    ]
+    assert grouped[3]["evidence_cards"] == []
+    assert grouped[3]["has_detail"] is False
 
 
 def test_cited_by_cards_follow_the_row_order() -> None:
@@ -239,6 +259,57 @@ def test_self_citation_is_not_an_authority(chain_source: DataSource) -> None:
     }
     page = SiteBuilder(chain_source).build_opinion(opinion)
     assert [a["n"] for a in page["cited_authorities"]] == [2]
+
+
+def test_authority_cards_follow_the_shared_rule(
+    chain_source: DataSource,
+) -> None:
+    # the same rule as Cited By: a card for every treatment but a plain
+    # citation, applied or recognized, whatever its severity
+    opinion = {
+        **chain_source.opinions[1],
+        "citation_groups": [
+            {
+                "n": 1,
+                "cited_cluster_id": 1,
+                "name": "Plain",
+                "n_mentions": 1,
+                "rationale": "mentioned once",
+            },
+            {
+                "n": 2,
+                "cited_cluster_id": 1,
+                "name": "Denied",
+                "n_mentions": 1,
+                "treatment": "Cert. denied by",
+                "rationale": "review refused",
+            },
+            {
+                "n": 3,
+                "cited_cluster_id": 1,
+                "name": "Reported",
+                "n_mentions": 1,
+                "recognized": [
+                    {
+                        "treatment": "Cert. denied by",
+                        "severity": "Neutral",
+                        "rationale": "the string reports a denial",
+                    }
+                ],
+            },
+        ],
+        "citation_groups_meta": {"n_authorities": 3},
+    }
+    page = SiteBuilder(chain_source).build_opinion(opinion)
+    by_n = {a["n"]: a for a in page["cited_authorities"]}
+    assert by_n[1]["evidence_cards"] == []
+    assert by_n[1]["has_detail"] is False
+    assert [c["label"] for c in by_n[2]["evidence_cards"]] == ["Denied cert."]
+    assert by_n[2]["has_detail"] is True
+    assert [c["label"] for c in by_n[3]["evidence_cards"]] == [
+        "Recognizes to be cert. denied"
+    ]
+    assert by_n[3]["has_detail"] is True
 
 
 def test_builder_pages(chain_source: DataSource) -> None:

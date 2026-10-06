@@ -1,7 +1,9 @@
 /*
 "+N" / "less" toggle for a clamped list (citations, "also cited as" forms).
-The extra entries are hidden by CSS (.cite-extra) and revealed by the
-`is-expanded` class on the enclosing <dd>, so the list keeps no state.
+The extra entries are hidden by CSS (.cite-extra, and .cite-fit-hidden set
+by assets/js/cite_fit.js) and revealed by the `is-expanded` class on the
+enclosing <dd>, so the list keeps no state. Collapsing dispatches
+`cite-list:collapse` on the <dd>, which cite_fit.js listens for.
 
 Usage:
   <dd>
@@ -18,6 +20,7 @@ document.addEventListener('alpine:init', () => {
       if (!cell) return;
       const expanded = cell.classList.toggle('is-expanded');
       button.textContent = expanded ? button.dataset.less : button.dataset.more;
+      if (!expanded) cell.dispatchEvent(new CustomEvent('cite-list:collapse', { bubbles: true }));
     },
   }));
 });

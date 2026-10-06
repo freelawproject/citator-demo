@@ -75,6 +75,7 @@ assets/
   css/styles.css        Tailwind input
   js/same_page_links.js in-page links replace the history entry
                         instead of adding one
+  js/cite_fit.js        fits each clamped citation list to one line
   js/alpine/components/ one component per page or list, plus the
                         Back control and the first-visit About hint
   js/alpine/composables/ shared Alpine behaviour (list toggle, highlight)
@@ -108,22 +109,26 @@ one opinion in the collection has it. Every group resolved to an opinion
 in the collection is one edge from the citing opinion to the cited
 opinion. The Authorities tab is the edges
 where an opinion is the citing side, in the active voice
-("Distinguishes"); the Cited By tab, the status rows and the home cards
+("Distinguishing"); the Cited By tab, the status rows and the home cards
 are the edges where it is the cited side, in the passive ("Distinguished
 by"); the mention count is the same number on both. A treatment a citing
 opinion only reports another court applying is the "as recognized by"
 form and keeps that treatment's severity. The Cited By tab lists one row
-per citing opinion, however many treatments run between the two, with
-one evidence card per negative treatment. The citing-scope CSVs say
-which citing opinions were fetched for each anchor; they create no rows.
+per citing opinion, however many treatments run between the two. On
+both tabs every treatment other than a plain "Cited by", applied or
+recognized, gets an evidence card with its rationale and quote; the
+rule and the card are shared (`taxonomy.has_evidence`,
+`macros/evidence.njk`). The citing-scope CSVs say which citing opinions
+were fetched for each anchor; they create no rows.
 
-Treatments roll up into five severity tiers, most serious first: Stop,
-Warning, Caution, Neutral and Positive (an affirmance). The first three
-are the negative tiers; only they produce evidence cards, text markers
-and expert-disagreement marks (`scripts/taxonomy.py`). An opinion's own
-disposition renders in the past tense as the court states it; one the
-taxonomy has no label for renders as "Ordered" and opens the sentence
-that disposed of the case.
+Treatments roll up into four severity tiers, most serious first: Stop,
+Warning, Caution and Neutral (an affirmance is Neutral). The first three
+are the negative tiers; only they produce text markers and
+expert-disagreement marks (`scripts/taxonomy.py`). An opinion's own
+disposition renders in the active voice, what this opinion did
+("Affirming"), as does every card on the History tab (what that decision
+did); one the taxonomy has no label for renders as "Ordered" on both
+and opens the sentence that disposed of the case.
 
 `scripts/real_data.py` reads `data-source/`:
 
@@ -141,20 +146,28 @@ that disposed of the case.
 An opinion payload holds `cluster_id`, `case_name`, `docket_number`,
 `citations`, `court`, `court_full_name`, `court_jurisdiction`,
 `date_filed` and `opinions`, one entry per writing with `id`, `type`,
-`author` and `html`.
+`author` and `html`. Citation lists are reordered with the primary
+reporters first (U.S., F.3d, S. Ct., …; `real_data.order_citations`).
 
 The build writes `_data/opinions/{cluster_id}.json` (one per page),
 `index.json` (the home list), `scope.json` (counts for the About page),
 `flags.json`, `courts.json`, `court_picker.json`, `court_categories.json`,
-`court_jurisdictions.json` and `treatments.json` (the taxonomy table).
+`court_jurisdictions.json`, `treatments.json` (the taxonomy table) and
+`treatment_definitions.json` (every pill label mapped to its
+definition, shown on hover and focus; each definition speaks from the
+page it is on, where the opinion shown is always "this case").
 
 ## Pages
 
 - **Home** lists every opinion, newest first, with search by name or
   citation, a court picker, "Anchor opinions only" (on by default) and
-  severity toggles for each of the three status questions (disposition,
-  on appeal, later courts); ticked severities are a union. Filter state
-  lives in the URL.
+  severity toggles for each of the two status questions a card answers
+  (on appeal, later courts); ticked severities are a union. Filter state
+  lives in the URL. A card shows On appeal and Later courts only when
+  there is something to report; the opinion page shows every status row,
+  counting Later courts to zero, and adds the Disposition row. Citation
+  and docket lists show up to three entries, as many as fit on one line
+  (`assets/js/cite_fit.js`), and fold the rest behind "+N".
 - **Opinion** shows the case card and status rows, then four tabs:
   Opinion (the text, every citation linked to its Authorities row, with
   a marker for a negative treatment), Authorities and Cited By (each with
@@ -195,9 +208,12 @@ npx netlify-cli link
 # publish: stop any running `npm run dev` first, then build and upload
 npm run build
 npx netlify-cli deploy --prod --dir=_site --no-build
+
+# when only templates, CSS or JS changed, skip the data step (minutes)
+npm run build:css && npm run build:eleventy
 ```
 
-Run both commands from the project root. The link is stored in
+Run the commands from the project root. The link is stored in
 `.netlify/` (gitignored). `--no-build` stops the CLI from running the
 site's build command a second time. Dropping `--prod` uploads a preview
 at a unique URL without replacing the live site. A running dev server

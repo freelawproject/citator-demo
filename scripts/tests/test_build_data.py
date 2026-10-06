@@ -9,6 +9,7 @@ import mock_data
 from build_data import (
     HierarchyError,
     SiteBuilder,
+    cited_by_severities,
     docket_numbers,
     group_cited_by,
     home_status,
@@ -18,7 +19,7 @@ from build_data import (
     write_site,
 )
 from data_source import DataSource
-from real_data import ClusterResolver, Loader
+from real_data import ClusterResolver, Loader, order_citations
 
 
 def row(citing: int, treatment: str, date: str, **extra: object) -> dict:
@@ -29,9 +30,11 @@ def row(citing: int, treatment: str, date: str, **extra: object) -> dict:
         "treatment": treatment,
         "severity": {
             "Cited by": "Neutral",
+            "Cert. denied as recognized by": "Neutral",
             "Distinguished by": "Caution",
             "Overruled as recognized by": "Stop",
-            "Affirmed by": "Positive",
+            "Vacated as recognized by": "Stop",
+            "Affirmed by": "Neutral",
         }[treatment],
         "direction": (
             "Related Reference"
@@ -59,12 +62,31 @@ def test_group_cited_by_merges_one_citing_opinion() -> None:
     assert one["severity"] == "Stop"
     assert [p["treatment_past"] for p in one["recognized"]] == ["Overruled"]
     assert one["recognized_filter"] == "Stop"
-    # only negative treatments get an evidence card
+    # every treatment but the plain citation gets an evidence card
     assert [c["label"] for c in one["evidence_cards"]] == [
         "Overruled as recognized by"
     ]
     assert grouped[2]["recognized_filter"] == "none"
     assert grouped[2]["has_detail"] is True
+
+
+def test_cited_by_cards_cover_neutral_acts_and_affirmances() -> None:
+    rows = [
+        row(1, "Cited by", "2020-01-01"),
+        row(1, "Cert. denied as recognized by", "2020-01-01"),
+        row(2, "Affirmed by", "2020-01-01"),
+        row(3, "Cited by", "2020-01-01"),
+    ]
+    grouped = {g["citing_cluster_id"]: g for g in group_cited_by(rows)}
+    assert [c["label"] for c in grouped[1]["evidence_cards"]] == [
+        "Cert. denied as recognized by"
+    ]
+    assert grouped[1]["has_detail"] is True
+    assert [c["label"] for c in grouped[2]["evidence_cards"]] == [
+        "Affirmed by"
+    ]
+    assert grouped[3]["evidence_cards"] == []
+    assert grouped[3]["has_detail"] is False
 
 
 def test_cited_by_cards_follow_the_row_order() -> None:
@@ -109,6 +131,18 @@ def test_home_status_states() -> None:
         {**base, "cited_by": [], "cited_by_populated": False}
     )
     assert unknown["on_appeal"]["state"] == "unknown"
+    assert unknown["later_courts"]["state"] == "unknown"
+    # within the collection the citing set is complete, so none is known
+    in_collection = home_status(
+        {
+            **base,
+            "cited_by": [],
+            "cited_by_populated": False,
+            "cited_by_scope": "collection",
+        }
+    )
+    assert in_collection["later_courts"] == {"state": "none"}
+    assert in_collection["on_appeal"]["state"] == "unknown"
     colr = home_status(
         {**base, "cited_by": [], "is_court_of_last_resort": True}
     )
@@ -241,16 +275,69 @@ def test_self_citation_is_not_an_authority(chain_source: DataSource) -> None:
     assert [a["n"] for a in page["cited_authorities"]] == [2]
 
 
+def test_authority_cards_follow_the_shared_rule(
+    chain_source: DataSource,
+) -> None:
+    # the same rule as Cited By: a card for every treatment but a plain
+    # citation, applied or recognized, whatever its severity
+    opinion = {
+        **chain_source.opinions[1],
+        "citation_groups": [
+            {
+                "n": 1,
+                "cited_cluster_id": 1,
+                "name": "Plain",
+                "n_mentions": 1,
+                "rationale": "mentioned once",
+            },
+            {
+                "n": 2,
+                "cited_cluster_id": 1,
+                "name": "Denied",
+                "n_mentions": 1,
+                "treatment": "Cert. denied by",
+                "rationale": "review refused",
+            },
+            {
+                "n": 3,
+                "cited_cluster_id": 1,
+                "name": "Reported",
+                "n_mentions": 1,
+                "recognized": [
+                    {
+                        "treatment": "Cert. denied by",
+                        "severity": "Neutral",
+                        "rationale": "the string reports a denial",
+                    }
+                ],
+            },
+        ],
+        "citation_groups_meta": {"n_authorities": 3},
+    }
+    page = SiteBuilder(chain_source).build_opinion(opinion)
+    by_n = {a["n"]: a for a in page["cited_authorities"]}
+    assert by_n[1]["evidence_cards"] == []
+    assert by_n[1]["has_detail"] is False
+    assert [c["label"] for c in by_n[2]["evidence_cards"]] == ["Denying cert."]
+    assert by_n[2]["has_detail"] is True
+    assert [c["label"] for c in by_n[3]["evidence_cards"]] == [
+        "Recognizing to be cert. denied"
+    ]
+    assert by_n[3]["has_detail"] is True
+
+
 def test_builder_pages(chain_source: DataSource) -> None:
     builder = SiteBuilder(chain_source)
     page = builder.build_opinion(chain_source.opinions[1])
     assert page["cl_url"].endswith("/opinion/2/x/")
-    assert page["disposition"]["label"] == "Affirmed"
+    assert page["disposition"]["label"] == "Affirming"
     cited_by = {r["citing_cluster_id"]: r for r in page["cited_by"]}
     assert cited_by[3]["treatment"] == "Reversed by"
     assert cited_by[4]["recognized"][0]["treatment_past"] == "Reversed"
-    assert page["summary"] == {"dh_severity": "Stop", "cr_severity": "Stop"}
-    assert page["disposition"]["severity"] == "Positive"
+    # the reversal the California opinion reports is an appeal step, not a
+    # later-court treatment, so it no longer colours the Later courts tier
+    assert page["summary"] == {"dh_severity": "Stop", "cr_severity": "Caution"}
+    assert page["disposition"]["severity"] == "Neutral"
     assert page["status"]["on_appeal"]["citing_name"] == "Jones v. Smith"
     assert page["appellate_history"]["n_opinions"] == 3
     entry = builder.index_entry(page)
@@ -273,3 +360,65 @@ def test_write_site_from_fixtures(tmp_path: Path) -> None:
         "treatments.json",
     ):
         assert (tmp_path / name).exists(), name
+
+
+def test_status_rows_and_filters_read_the_same_acts() -> None:
+    # the citing opinion affirmed this case itself and reports that another
+    # court vacated it: the vacatur is what happened on appeal, and the
+    # home filter must see the same tier the On appeal row shows
+    rows = sort_cited_by(
+        group_cited_by(
+            [
+                row(1, "Affirmed by", "2025-01-01"),
+                row(1, "Vacated as recognized by", "2025-01-01"),
+                row(2, "Cited by", "2024-01-01"),
+                row(2, "Overruled as recognized by", "2024-01-01"),
+            ]
+        )
+    )
+    status = home_status(
+        {
+            "is_court_of_last_resort": False,
+            "cited_by_populated": True,
+            "cited_by_scope": "controlling",
+            "cited_by": rows,
+        }
+    )
+    assert (
+        status["on_appeal"]["treatment"],
+        status["on_appeal"]["severity"],
+    ) == ("Vacated as recognized by", "Stop")
+    later = status["later_courts"]
+    assert (later["state"], later["treatment"], later["n_total"]) == (
+        "negative",
+        "Overruled as recognized by",
+        1,
+    )
+    assert cited_by_severities(rows) == {
+        "dh_severity": "Stop",
+        "cr_severity": "Stop",
+    }
+
+
+def test_order_citations_puts_primary_reporters_first() -> None:
+    assert order_citations(
+        [
+            "100 Empl. Prac. Dec. (CCH) 45,556",
+            "84 U.S.L.W. 4263",
+            "578 U.S. 330",
+            "194 L. Ed. 2d 635",
+            "136 S. Ct. 1540",
+        ]
+    ) == [
+        "578 U.S. 330",
+        "136 S. Ct. 1540",
+        "194 L. Ed. 2d 635",
+        "100 Empl. Prac. Dec. (CCH) 45,556",
+        "84 U.S.L.W. 4263",
+    ]
+    assert order_citations(
+        ["108 A.F.T.R.2d (RIA) 7074", "398 U.S. App. D.C. 134", "661 F.3d 1"]
+    ) == ["661 F.3d 1", "398 U.S. App. D.C. 134", "108 A.F.T.R.2d (RIA) 7074"]
+    # the rest keep their order; an empty list is fine
+    assert order_citations(["x", "y"]) == ["x", "y"]
+    assert order_citations([]) == []

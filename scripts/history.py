@@ -13,8 +13,8 @@ The result places nodes on a grid: one column per court level, lowest
 court on the left and highest on the right, and one row per decision in
 time order, newest at the top, with a connector row between each pair of
 decision rows. The connector joins each decision to the one before it in
-time, so the route reads as one unbroken path; what each court did, and
-to which decision, is written on its card.
+time, so the route reads as one unbroken path; what each court did is
+written on its card, and the path shows to which decision.
 """
 
 from __future__ import annotations
@@ -26,17 +26,18 @@ from model_output import (
     act_verbs,
     below_entry,
     canonical_court,
+    disposition_treatment,
     names_supreme_court,
 )
 from taxonomy import (
     DIRECT_HISTORY_TREATMENTS,
-    SEVERITY_BY_TREATMENT,
     base_treatment,
     direction_for,
     is_recognized,
     past_tense,
     severity_for,
     severity_rank,
+    to_active_voice,
 )
 
 UNKNOWN_LEVEL = 99
@@ -49,15 +50,34 @@ Node = dict[str, Any]
 Edge = dict[str, Any]
 
 
-def _link(treatment: str, severity: str, quote: str) -> Link:
-    return {"treatment": treatment, "severity": severity, "quote": quote}
+def _link(treatment: str, severity: str, quote: str, text: str = "") -> Link:
+    """One act on an edge. A disposition the taxonomy has no label for is
+    "Ordered by" and carries the court's own sentence as `text`."""
+    return {
+        "treatment": treatment,
+        "severity": severity,
+        "quote": quote,
+        "text": text,
+    }
 
 
-def _labels(links: list[Link]) -> list[dict[str, str]]:
+def _labels(links: list[Link], own: bool) -> list[dict[str, str]]:
+    """What a card says that decision did: a pill in the active voice
+    ("Reversing"); an order with no label is the "Ordered" pill, which
+    opens the court's own sentence (`text`). `defined_as` is the label
+    whose definition the pill shows, written from the page's side: the
+    active form on the page's own card, the past form ("Reversed") on any
+    other card, where the page's case is the one acted on."""
     return [
         {
-            "treatment": lk["treatment"].removesuffix(" by"),
+            "treatment": to_active_voice(lk["treatment"]),
+            "defined_as": (
+                to_active_voice(lk["treatment"])
+                if own
+                else lk["treatment"].removesuffix(" by")
+            ),
             "severity": lk["severity"],
+            "text": lk["text"],
         }
         for lk in links
     ]
@@ -236,7 +256,9 @@ class _GraphBuilder:
 
     def add_decisions_below(self) -> None:
         """For every decision with nothing recorded below it, the decision
-        it says it reviewed, as a node the site has no page for."""
+        it says it reviewed, as a node the site has no page for. The link
+        carries the opinion's disposition (model_output.disposition_treatment);
+        with none recorded it is drawn but says nothing."""
         for cluster_id, at in self._opinion_indexes():
             if any(e["actor"] == at for e in self.edges):
                 continue
@@ -244,7 +266,7 @@ class _GraphBuilder:
             entry = below_entry(record)
             if entry is None:
                 continue
-            label = (record.get("disposition") or {}).get("label") or ""
+            disposition = disposition_treatment(record.get("disposition"))
             key = ("below", entry.get("court") or "", entry.get("name") or "")
             below = self.index_of.get(key)
             if below is None:
@@ -253,26 +275,25 @@ class _GraphBuilder:
                         "role": "below",
                         "cluster_id": None,
                         "url": "",
-                        "case_name": entry.get("name") or "Decision below",
+                        "case_name": entry.get("name") or "",
                         "court": entry.get("court") or "",
                         "date_filed": "",
                     },
                     key,
                 )
-            treatment = f"{label} by"
-            self.edges.append(
-                {
-                    "actor": at,
-                    "target": below,
-                    "links": [
-                        _link(
-                            treatment,
-                            SEVERITY_BY_TREATMENT.get(treatment, "Neutral"),
-                            entry.get("quote") or "",
-                        )
-                    ],
-                }
+            links = (
+                [
+                    _link(
+                        disposition["treatment"],
+                        disposition["severity"],
+                        entry.get("quote") or "",
+                        disposition["text"],
+                    )
+                ]
+                if disposition
+                else []
             )
+            self.edges.append({"actor": at, "target": below, "links": links})
 
     def _collect_reports(self) -> dict[tuple[int, int], JsonDict]:
         """Reported acts per (decision, reporting opinion), skipping acts a
@@ -423,32 +444,24 @@ class _GraphBuilder:
 
         return sorted(range(len(self.nodes)), key=when)
 
-    def _act_phrase(self, actor: Node, act: Node) -> str:
-        if actor["role"] == "reported":
-            return "this case"
-        if act["court"] == actor["court"]:
-            return "its own earlier decision"
-        return f"the {act['court']}"
-
     def layout(self) -> JsonDict:
         """Grid placement: columns by court level (lowest court first),
-        rows by time (newest first), and for each card the connectors
-        reaching it."""
+        rows by time (newest first), and for each card what it did and
+        the connector reaching it."""
         nodes, edges = self.nodes, self.edges
         if len(nodes) == 1:
             return {"steps": nodes, "chain": [], "levels": [], "n_opinions": 1}
         self._place_unknown_levels()
         sequence = self._sequence()
-        for step, i in enumerate(sequence, start=1):
-            nodes[i]["seq"] = step
         for edge in edges:
-            target = nodes[edge["target"]]
-            nodes[edge["actor"]].setdefault("acted_on", []).append(
+            if not edge["links"]:
+                continue
+            actor = nodes[edge["actor"]]
+            actor.setdefault("acts", []).append(
                 {
-                    "court": target["court"],
-                    "target": edge["target"],
-                    "seq": target.get("seq"),
-                    "treatments": _labels(edge["links"]),
+                    "treatments": _labels(
+                        edge["links"], own=actor["role"] == "self"
+                    )
                 }
             )
         # court columns: the time axis takes column 1 and a spacer column
@@ -498,9 +511,10 @@ class _GraphBuilder:
         tier_of: dict[int, str],
         previous: int | None,
     ) -> JsonDict:
-        """One card: its grid cell, what it did, and the connector from the
-        decision before it in time: an elbow in the row below the card,
-        running from the previous decision's column to this court's."""
+        """One card: its grid cell and the connector from the decision
+        before it in time: an elbow in the row below the card, running
+        from the previous decision's column to this court's. What the
+        card did (`acts`) is already on the node."""
         row, col = row_of[i], col_of[node["level"]]
         links = []
         if previous is not None:
@@ -526,12 +540,6 @@ class _GraphBuilder:
             "row": row,
             "col": col,
             "tier": tier_of[node["level"]],
-            "acts": [
-                {
-                    "treatments": a["treatments"],
-                    "target": self._act_phrase(node, a),
-                }
-                for a in node.get("acted_on") or []
-            ],
+            "acts": node.get("acts") or [],
             "links": links,
         }

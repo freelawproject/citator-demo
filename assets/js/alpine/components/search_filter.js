@@ -3,8 +3,8 @@ Home page: the search box, the court picker, the severity filters,
 "anchor opinions only" and pagination over the filtered cards.
 
 Markup contract (src/index.njk):
-  - cards carry data-court, data-tier, data-search, data-disp-severity,
-    data-dh-severity, data-cr-severity
+  - cards carry data-court, data-tier, data-search, data-dh-severity,
+    data-cr-severity
   - the anchors checkbox and the severity toggles carry data-filter (a
     property name)
   - picker tabs and panels carry data-tab-key; court rows carry
@@ -15,12 +15,9 @@ for back-navigation) so a filtered list can be shared and restored.
 */
 const PAGE_SIZE = 10;
 const STORAGE_KEY = 'citatorSearchFilter';
-const DISP_FILTERS = [
-  'filterDispStop', 'filterDispWarning', 'filterDispCaution', 'filterDispNeutral', 'filterDispPositive',
-];
-const DH_FILTERS = ['filterDhStop', 'filterDhWarning', 'filterDhCaution', 'filterDhNeutral', 'filterDhPositive'];
-const CR_FILTERS = ['filterCrStop', 'filterCrWarning', 'filterCrCaution', 'filterCrNeutral', 'filterCrPositive'];
-const TIERS = ['stop', 'warning', 'caution', 'neutral', 'positive'];
+const DH_FILTERS = ['filterDhStop', 'filterDhWarning', 'filterDhCaution', 'filterDhNeutral'];
+const CR_FILTERS = ['filterCrStop', 'filterCrWarning', 'filterCrCaution', 'filterCrNeutral'];
+const TIERS = ['stop', 'warning', 'caution', 'neutral'];
 
 function courtKeyOf(el) {
   const holder = el.closest('[data-court-key]');
@@ -33,21 +30,14 @@ document.addEventListener('alpine:init', () => {
     // the query reduced to letters and digits, matched against data-search
     queryKey: '',
     selectedCourts: [],
-    filterDispStop: false,
-    filterDispWarning: false,
-    filterDispCaution: false,
-    filterDispNeutral: false,
-    filterDispPositive: false,
     filterDhStop: false,
     filterDhWarning: false,
     filterDhCaution: false,
     filterDhNeutral: false,
-    filterDhPositive: false,
     filterCrStop: false,
     filterCrWarning: false,
     filterCrCaution: false,
     filterCrNeutral: false,
-    filterCrPositive: false,
     filterAnchorsOnly: true,
     totalCount: 0,
     visibleCount: 0,
@@ -97,10 +87,10 @@ document.addEventListener('alpine:init', () => {
       this.changed();
     },
     get hasSeverityFilters() {
-      return [...DISP_FILTERS, ...DH_FILTERS, ...CR_FILTERS].some((p) => this[p]);
+      return [...DH_FILTERS, ...CR_FILTERS].some((p) => this[p]);
     },
     clearSeverityFilters() {
-      [...DISP_FILTERS, ...DH_FILTERS, ...CR_FILTERS].forEach((p) => {
+      [...DH_FILTERS, ...CR_FILTERS].forEach((p) => {
         this[p] = false;
       });
       this.changed();
@@ -227,11 +217,10 @@ document.addEventListener('alpine:init', () => {
     rowMatches(el) {
       if (this.filterAnchorsOnly && el.dataset.tier !== 'anchor') return false;
       if (this.selectedCourts.length && !this.selectedCourts.includes(el.dataset.court)) return false;
-      // the three severity groups are a union: a card shows when any
-      // ticked severity matches its disposition, appeal or later treatment
+      // the two severity groups are a union: a card shows when any
+      // ticked severity matches its appeal or later treatment
       if (this.hasSeverityFilters) {
         const hit =
-          this.tierHit(DISP_FILTERS, el.dataset.dispSeverity) ||
           this.tierHit(DH_FILTERS, el.dataset.dhSeverity) ||
           this.tierHit(CR_FILTERS, el.dataset.crSeverity);
         if (!hit) return false;
@@ -312,7 +301,6 @@ document.addEventListener('alpine:init', () => {
       this.queryKey = this.normalize(this.query);
       const courts = params.get('courts');
       this.selectedCourts = courts ? courts.split(',').filter(Boolean) : [];
-      this.setTiers(DISP_FILTERS, (params.get('disp_sev') || '').split(','));
       this.setTiers(DH_FILTERS, (params.get('dh_sev') || '').split(','));
       this.setTiers(CR_FILTERS, (params.get('cr_sev') || '').split(','));
       this.filterAnchorsOnly = params.get('anchors') !== '0';
@@ -325,8 +313,6 @@ document.addEventListener('alpine:init', () => {
       const params = new URLSearchParams();
       if (this.query) params.set('q', this.query);
       if (this.selectedCourts.length) params.set('courts', this.selectedCourts.join(','));
-      const disp = this.activeTiers(DISP_FILTERS);
-      if (disp.length) params.set('disp_sev', disp.join(','));
       const dh = this.activeTiers(DH_FILTERS);
       if (dh.length) params.set('dh_sev', dh.join(','));
       const cr = this.activeTiers(CR_FILTERS);

@@ -123,6 +123,39 @@ JURISDICTION_CLASS: dict[str, tuple[str, int, bool]] = {
 DEFAULT_CLASS = ("state_trial", 3, False)
 
 
+# Reporters in the order a citation list shows them: the official and
+# primary reporters first; anything else follows in the source's order.
+_REPORTER_RANK: tuple[re.Pattern[str], ...] = tuple(
+    re.compile(p)
+    for p in (
+        r"^\d+ U\.S\. \d",  # United States Reports
+        r"^\d+ F\.(?: ?[234]d| ?4th)? \d",  # Federal Reporter
+        r"^\d+ F\. ?Supp\.(?: ?[23]d)? \d",  # Federal Supplement
+        r"^\d+ F\. ?App'x \d",  # Federal Appendix
+        # regional and state official reporters
+        r"^\d+ (?:[NS]\.[EW]\.|A\.|P\.|So\.|Cal\.|N\.Y\.|Ill\.|Mass\.|Pa\."
+        r"|Ohio St\.|Wash\.|Tex\.|Mich\.)(?: ?[2345]d| ?[2345]th)? \d",
+        r"^\d+ S\. ?Ct\. \d",  # Supreme Court Reporter
+        r"^\d+ L\. ?Ed\.(?: ?2d)? \d",  # Lawyers' Edition
+        # courts with a reporter of their own
+        r"^\d+ (?:U\.S\. App\. D\.C\.|B\.R\.|Fed\. Cl\.|T\.C\.|Vet\. App\.) \d",
+    )
+)
+
+
+def order_citations(citations: list[str]) -> list[str]:
+    """The citations with the primary reporters first (_REPORTER_RANK),
+    the rest after them in their original order."""
+
+    def rank(cite: str) -> int:
+        return next(
+            (i for i, p in enumerate(_REPORTER_RANK) if p.match(cite)),
+            len(_REPORTER_RANK),
+        )
+
+    return sorted(citations, key=rank)
+
+
 def _cite_key(text: str) -> str:
     """A citation reduced to letters and digits, pin cite dropped."""
     return re.sub(r"[^a-z0-9]+", "", text.split(",")[0].lower())
@@ -332,7 +365,7 @@ class Loader:
                     "date_filed_iso": meta.get("date_filed") or "",
                     "status": meta.get("status", ""),
                     "court_name": meta.get("court_name", ""),
-                    "citations": meta.get("citations", []),
+                    "citations": order_citations(meta.get("citations", [])),
                 }
             )
         rows.sort(key=lambda r: r["n"])
@@ -383,7 +416,7 @@ class Loader:
             "case_name": display_case_name(rec),
             "name_missing": not (rec.get("case_name") or "").strip(),
             "docket_number": rec.get("docket_number") or "",
-            "citations": rec.get("citations") or [],
+            "citations": order_citations(rec.get("citations") or []),
             "court": rec["court"],
             "date_filed": rec["date_filed"],
             "document_text": cluster_to_document_text(

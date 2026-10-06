@@ -22,7 +22,7 @@
     <div class="list-filter__columns">
       <div>
         <p class="list-filter__heading">{{ applied_label }}</p>
-        {% for tier in ["Stop", "Warning", "Caution", "Neutral", "Positive"] %}
+        {% for tier in ["Stop", "Warning", "Caution", "Neutral"] %}
         <label class="list-filter__option">
           <input type="checkbox" class="checkbox" data-filter="filter{{ tier }}" x-bind:checked="filterChecked" x-on:change="toggleFilter">
           {{ severityBadge(tier, tier, true) }}
@@ -31,7 +31,7 @@
       </div>
       <div>
         <p class="list-filter__heading">{{ rec_label }}</p>
-        {% for tier in ["Stop", "Warning", "Caution", "Neutral", "Positive"] %}
+        {% for tier in ["Stop", "Warning", "Caution", "Neutral"] %}
         <label class="list-filter__option">
           <input type="checkbox" class="checkbox" data-filter="filterRec{{ tier }}" x-bind:checked="filterChecked" x-on:change="toggleFilter">
           {{ severityBadge(tier, tier, true) }}

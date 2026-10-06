@@ -138,9 +138,12 @@ document.addEventListener('alpine:init', () => {
 
     // ── in-page jumps ──────────────────────────────────────────────────
     // The URL hash names a tab, a writing section, an Authorities row, or
-    // a quoted passage (`q=`).
+    // a quoted passage (`q=`). No hash is the page as first opened, on
+    // the Opinion tab, which is where Back from a tab change lands.
     handleHash(hash) {
-      if (VALID_TABS.includes(hash)) {
+      if (!hash) {
+        this.activeTab = VALID_TABS[0];
+      } else if (VALID_TABS.includes(hash)) {
         this.activeTab = hash;
       } else if (hash.startsWith('q=')) {
         let quote = '';
@@ -274,8 +277,7 @@ document.addEventListener('alpine:init', () => {
 
     init() {
       this.pageRoot = this.$root;
-      const hash = window.location.hash.slice(1);
-      if (hash) this.handleHash(hash);
+      this.handleHash(window.location.hash.slice(1));
       window.addEventListener('hashchange', () => this.handleHash(window.location.hash.slice(1)));
       this.$root.addEventListener('click', (e) => this.onCitationClick(e));
       this.$root.addEventListener('click', (e) => this.onHashLinkClick(e));

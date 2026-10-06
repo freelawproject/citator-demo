@@ -6,6 +6,7 @@ from model_output import (
     canonical_court,
     clean_authority_name,
     disposition_label,
+    disposition_treatment,
     document_token_streams,
     expand_quote,
     is_case_group,
@@ -111,7 +112,7 @@ def test_disposition_forms() -> None:
     assert disposition_label(
         {"label": "Reversed and remanded", "text": "x"}
     ) == {
-        "label": "Reversed and remanded",
+        "label": "Reversing and remanding",
         "severity": "Stop",
         "text": "",
     }
@@ -123,6 +124,26 @@ def test_disposition_forms() -> None:
         "text": "Motion granted.",
     }
     assert disposition_label({"label": "None", "text": ""}) is None
+
+
+def test_disposition_treatment_matches_the_status_row() -> None:
+    assert disposition_treatment({"label": "Affirmed", "text": ""}) == {
+        "treatment": "Affirmed by",
+        "severity": "Neutral",
+        "text": "",
+    }
+    assert disposition_treatment({"label": "Other", "text": "Denied."}) == {
+        "treatment": "Ordered by",
+        "severity": "Neutral",
+        "text": "Denied.",
+    }
+    assert disposition_treatment({"label": "Modified", "text": ""}) == {
+        "treatment": "Ordered by",
+        "severity": "Neutral",
+        "text": "Modified",
+    }
+    assert disposition_treatment({"label": "None", "text": ""}) is None
+    assert disposition_treatment(None) is None
 
 
 def test_sentence_bounds_respects_legal_abbreviations() -> None:

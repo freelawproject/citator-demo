@@ -106,6 +106,6 @@ def test_render_writings_with_groups_links_rows_and_footnotes() -> None:
     assert '<span class="cited-case">' in plain
     assert html.count("cited-case__severity--stop") == 2
     assert 'data-url="/opinion/9/"' in html
-    assert "Distinguishes" in html
+    assert "Distinguishing" in html
     assert '<aside class="opinion-footnotes"' in html
     assert 'href="#fnref-1-1"' in html

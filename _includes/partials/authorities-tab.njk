@@ -48,12 +48,12 @@
         {# what this opinion does, then what it recognizes other courts did #}
         <div class="citator-row__treatment">
           <span>
-            {{ severityBadge(a.severity, a.treatment_active) }}
+            {{ severityBadge(a.severity, a.treatment_active, false, treatment_definitions[a.treatment_active]) }}
             {% if flags.validation %}{{ validationDot(a.applied_validation, a.expert_treatment) }}{% endif %}
           </span>
           {% for r in a.recognized %}
-          <span title="This opinion notes that the case was {{ r.treatment_past | lower }} by another court">
-            {{ severityBadge(r.severity, "Recognizes to be " ~ (r.treatment_past | lower)) }}
+          <span>
+            {{ severityBadge(r.severity, r.label, false, treatment_definitions[r.label]) }}
             {% if flags.validation %}{{ validationDot(r.validation, a.expert_treatment) }}{% endif %}
           </span>
           {% endfor %}
@@ -97,7 +97,7 @@
       </div>
       {% if a.has_detail %}</summary>
         <div class="authority-detail">
-          {% for c in a.evidence_cards %}{{ evidenceCard(c) }}{% endfor %}
+          {% for c in a.evidence_cards %}{{ evidenceCard(c, treatment_definitions) }}{% endfor %}
         </div>
       </details>{% endif %}
     </li>

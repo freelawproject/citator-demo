@@ -16,7 +16,7 @@ import re
 
 from cl_html import TAG_RE, plain_text
 from data_source import JsonDict
-from taxonomy import SEVERITY_BY_TREATMENT, past_tense
+from taxonomy import SEVERITY_BY_TREATMENT, to_active_voice
 
 # ── Authority names ──────────────────────────────────────────────────────
 # A procedural tag the extractor appends to an unnamed order ("Troppi v
@@ -87,12 +87,22 @@ def is_case_group(group: JsonDict) -> bool:
 
 
 # ── Dispositions ─────────────────────────────────────────────────────────
-def disposition_label(raw: JsonDict | None) -> JsonDict | None:
-    """How the opinion disposed of its case, for the status rows: a named
-    appellate disposition renders as a pill in the past tense, as the
-    opinion states it ("Affirmed", "Reversed and remanded"), with the
-    matching treatment's severity; anything else as a neutral "Ordered"
-    pill followed by the sentence that disposed of the case."""
+# The treatment form of an order the taxonomy has no label for (a motion
+# decided, a petition dismissed): a neutral "Ordered" pill with no
+# definition, opening the sentence that disposed of the case.
+ORDERED_TREATMENT = "Ordered by"
+# Labels that record no disposition at all.
+_NO_LABEL = frozenset({"", "None", "Other"})
+
+
+def disposition_treatment(raw: JsonDict | None) -> JsonDict | None:
+    """What an opinion did with its case: {"treatment", "severity", "text"}.
+    A named appellate disposition is its taxonomy label ("Reversed and
+    remanded by") with that treatment's severity and no text; any other
+    order, such as a motion decided, is the neutral "Ordered by" and
+    carries the sentence that disposed of the case (or the bare label the
+    source gave it, such as "Modified"). None when the opinion records
+    nothing. The status rows and the History tab both read this."""
     if not raw:
         return None
     label = (raw.get("label") or "").strip()
@@ -100,14 +110,32 @@ def disposition_label(raw: JsonDict | None) -> JsonDict | None:
     treatment = f"{label} by"
     if treatment in SEVERITY_BY_TREATMENT:
         return {
-            "label": past_tense(treatment),
+            "treatment": treatment,
             "severity": SEVERITY_BY_TREATMENT[treatment],
             "text": "",
         }
-    detail = text or (label if label not in ("", "None", "Other") else "")
-    if not detail:
+    if text or label not in _NO_LABEL:
+        return {
+            "treatment": ORDERED_TREATMENT,
+            "severity": "Neutral",
+            "text": text or label,
+        }
+    return None
+
+
+def disposition_label(raw: JsonDict | None) -> JsonDict | None:
+    """The disposition for the status rows: a named appellate disposition
+    renders as a pill in the active voice, what this opinion did
+    ("Affirming", "Reversing and remanding"); any other order as the
+    "Ordered" pill, which opens the sentence that disposed of the case."""
+    found = disposition_treatment(raw)
+    if found is None:
         return None
-    return {"label": "Ordered", "severity": "Neutral", "text": detail}
+    return {
+        "label": to_active_voice(found["treatment"]),
+        "severity": found["severity"],
+        "text": found["text"],
+    }
 
 
 # ── Appellate history: the decision below, acts and courts in prose ──────

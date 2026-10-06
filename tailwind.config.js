@@ -21,7 +21,6 @@ module.exports = {
     "sev-rail--warning",
     "sev-rail--caution",
     "sev-rail--neutral",
-    "sev-rail--positive",
     "history-move--up",
     "history-move--down",
     "history-move--same",
@@ -29,7 +28,6 @@ module.exports = {
     "sev-toggle--warning",
     "sev-toggle--caution",
     "sev-toggle--neutral",
-    "sev-toggle--positive",
   ],
   theme: {
     extend: {

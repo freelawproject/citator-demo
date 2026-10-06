@@ -11,6 +11,7 @@ CITATOR_DEMO_DATA=mock) and writes to `_data/`:
     court_picker.json           the home page's court picker
     court_categories.json, court_jurisdictions.json
     treatments.json             the treatment taxonomy by severity tier
+    treatment_definitions.json  every pill label → its definition
 
 The data source's `edges` are the single record of treatments. The Cited
 By tab of a cited opinion is derived from them; the Authorities tab of a
@@ -46,7 +47,9 @@ from taxonomy import (
     NEGATIVE_TIERS,
     VERTICAL_OR_SELF_TREATMENTS,
     base_treatment,
+    definition_lookup,
     direction_for,
+    has_evidence,
     is_recognized,
     past_tense,
     recognized_form,
@@ -184,6 +187,7 @@ def _pill(kind: str, row: JsonDict) -> JsonDict:
 def _evidence_card(pill: JsonDict, label: str) -> JsonDict:
     evidence = pill["evidence"]
     return {
+        "treatment": pill["treatment"],
         "label": label,
         "severity": pill["severity"],
         "rationale": evidence.get("rationale", ""),
@@ -193,13 +197,24 @@ def _evidence_card(pill: JsonDict, label: str) -> JsonDict:
     }
 
 
+def select_evidence_cards(cards: list[JsonDict]) -> list[JsonDict]:
+    """The cards a row presents: one per treatment other than a plain
+    citation (taxonomy.has_evidence). Both tabs use this."""
+    return [c for c in cards if has_evidence(c["treatment"])]
+
+
+def has_detail(cards: list[JsonDict]) -> bool:
+    """Whether a row expands: it has a card with something to show."""
+    return any(c["quote"] or c["rationale"] for c in cards)
+
+
 def group_cited_by(rows: list[JsonDict]) -> list[JsonDict]:
     """One row per citing opinion, however many treatments it applied.
 
     The row carries the treatment the citing opinion applied itself, the
     ones it recognizes other courts applied, one evidence card per
-    negative treatment, and the worst severity of them all, which is what
-    the severity filter and the sort see.
+    treatment other than a plain citation, and the worst severity of them
+    all, which is what the severity filter and the sort see.
     """
     grouped: dict[int, JsonDict] = {}
     for row in rows:
@@ -247,12 +262,8 @@ def group_cited_by(rows: list[JsonDict]) -> list[JsonDict]:
             _evidence_card(p, p["treatment"])
             for p in head["applied"] + head["recognized"]
         ]
-        head["evidence_cards"] = [
-            c for c in cards if c["severity"] in NEGATIVE_TIERS
-        ]
-        head["has_detail"] = any(
-            c["quote"] or c["rationale"] for c in head["evidence_cards"]
-        )
+        head["evidence_cards"] = select_evidence_cards(cards)
+        head["has_detail"] = has_detail(head["evidence_cards"])
         # what the status rows quote: the leading treatment's evidence
         head["evidence"] = cards[0] if cards else {}
         out.append(head)
@@ -279,32 +290,66 @@ def sort_cited_by(rows: list[JsonDict]) -> list[JsonDict]:
     return rows
 
 
+# ── Status rows ─────────────────────────────────────────────────────────
+# The status rows and the home page's severity filters read the Cited By
+# rows pill by pill, through the same helpers. A pill is a direct-history
+# act on this case when its treatment, applied or "as recognized by", is
+# a direct-history label; every other pill is a citing-reference
+# treatment.
+Act = tuple[JsonDict, JsonDict]  # (row, pill)
+
+
+def _row_pills(row: JsonDict) -> list[JsonDict]:
+    """A row's pills (group_cited_by), or the row itself as one pill."""
+    pills = (row.get("applied") or []) + (row.get("recognized") or [])
+    return pills or [
+        {"treatment": row["treatment"], "severity": row["severity"]}
+    ]
+
+
+def _is_direct(pill: JsonDict) -> bool:
+    """Whether a pill is a direct-history act, in either form."""
+    return base_treatment(pill["treatment"]) in DIRECT_HISTORY_TREATMENTS
+
+
+def _acts(rows: list[JsonDict], direct: bool) -> list[Act]:
+    """Every (row, pill) on the rows that is a direct-history act (or,
+    with `direct` false, a citing-reference treatment), worst first. At
+    equal severity a court's own act comes before another's report of
+    one, then the rows' own order (newest first) decides."""
+    pairs = [
+        (r, p) for r in rows for p in _row_pills(r) if _is_direct(p) == direct
+    ]
+    return sorted(
+        pairs,
+        key=lambda rp: (
+            severity_rank(rp[1]["severity"]),
+            is_recognized(rp[1]["treatment"]),
+        ),
+    )
+
+
+def _later_courts(rows: list[JsonDict]) -> list[Act]:
+    """One act per citing opinion that treats this case as an authority:
+    its worst citing-reference pill, worst opinion first."""
+    worst: dict[int, Act] = {}
+    for r, p in _acts(rows, direct=False):
+        worst.setdefault(r["citing_cluster_id"], (r, p))
+    return list(worst.values())
+
+
 def cited_by_severities(
     cited_by_sorted: list[JsonDict],
 ) -> dict[str, str | None]:
     """The worst direct-history and citing-reference tiers among a page's
-    Cited By rows, for the home page's severity filters."""
-    direct = [r for r in cited_by_sorted if r["direction"] == "Direct History"]
-    citing = [r for r in cited_by_sorted if r["direction"] != "Direct History"]
+    Cited By rows, for the home page's severity filters; the same acts
+    the status rows show (home_status)."""
+    appeals = _acts(cited_by_sorted, direct=True)
+    later = _later_courts(cited_by_sorted)
     return {
-        "dh_severity": direct[0]["severity"] if direct else None,
-        "cr_severity": citing[0]["severity"] if citing else None,
+        "dh_severity": appeals[0][1]["severity"] if appeals else None,
+        "cr_severity": later[0][1]["severity"] if later else None,
     }
-
-
-# ── Status rows ─────────────────────────────────────────────────────────
-def _worst_pill(row: JsonDict, directions: set[str] | None = None) -> JsonDict:
-    """The most severe pill on a row, with its own label and severity, so
-    a status row never pairs one pill's words with another's colour."""
-    pills = [
-        p
-        for p in (row.get("applied") or []) + (row.get("recognized") or [])
-        if directions is None or p.get("direction") in directions
-    ]
-    if not pills:
-        return {"treatment": row["treatment"], "severity": row["severity"]}
-    worst = min(pills, key=lambda p: severity_rank(p.get("severity")))
-    return {"treatment": worst["treatment"], "severity": worst["severity"]}
 
 
 def _passage(row: JsonDict) -> JsonDict:
@@ -324,16 +369,22 @@ def home_status(opinion_data: JsonDict) -> JsonDict:
     what the counts cover: every controlling citing opinion (the anchors)
     or only the opinions in the collection."""
     rows = opinion_data["cited_by"]
-    direct = [r for r in rows if r["direction"] == "Direct History"]
-    later = [r for r in rows if r["direction"] != "Direct History"]
-    negative = [r for r in later if r["severity"] in NEGATIVE_TIERS]
+    appeals = _acts(rows, direct=True)
+    later = _later_courts(rows)
+    negative = [(r, p) for r, p in later if p["severity"] in NEGATIVE_TIERS]
+    scope = opinion_data.get("cited_by_scope", "controlling")
     populated = opinion_data.get("cited_by_populated")
+    # every opinion on the site had its citations extracted, so the
+    # citing set within the collection is complete even when the
+    # controlling set was never fetched: no row means none, not unknown
+    later_known = populated or scope == "collection"
     on_appeal: JsonDict
-    if direct:
-        d = direct[0]
+    if appeals:
+        d, pill = appeals[0]
         on_appeal = {
             "state": "treated",
-            **_worst_pill(d, {"Direct History"}),
+            "treatment": pill["treatment"],
+            "severity": pill["severity"],
             "citing_name": d["citing_case_name"],
             "citing_cluster_id": d["citing_cluster_id"],
             **_passage(d),
@@ -344,8 +395,7 @@ def home_status(opinion_data: JsonDict) -> JsonDict:
         on_appeal = {"state": "none" if populated else "unknown"}
     later_courts: JsonDict
     if negative:
-        w = negative[0]
-        pill = _worst_pill(w)
+        w, pill = negative[0]
         later_courts = {
             "state": "negative",
             "treatment": pill["treatment"],
@@ -360,9 +410,9 @@ def home_status(opinion_data: JsonDict) -> JsonDict:
     elif later:
         later_courts = {"state": "plain", "n_total": len(later)}
     else:
-        later_courts = {"state": "none" if populated else "unknown"}
+        later_courts = {"state": "none" if later_known else "unknown"}
     return {
-        "scope": opinion_data.get("cited_by_scope", "controlling"),
+        "scope": scope,
         "on_appeal": on_appeal,
         "later_courts": later_courts,
     }
@@ -464,7 +514,7 @@ class SiteBuilder:
                 "quote_status": quote_status,
                 "quote_names": quote_names,
             },
-            "has_detail": bool(quote or rationale) and treatment != "Cited by",
+            "has_detail": bool(quote or rationale) and has_evidence(treatment),
             "row_id": f"cb-{edge_idx}",
             "citing_cluster_id": citing["cluster_id"],
             # the citing opinion's Authorities row for this case
@@ -508,17 +558,13 @@ class SiteBuilder:
         recognized = [
             {
                 **r,
-                "treatment_past": past_tense(r.get("treatment") or ""),
-                "treatment_recognized": recognized_form(
-                    r.get("treatment") or ""
-                ),
+                "label": recognizes_label(r.get("treatment") or ""),
                 "quote": expand_quote(document, r.get("quote") or ""),
             }
             for r in group.get("recognized") or []
         ]
         recognized.sort(key=lambda x: severity_rank(x.get("severity")))
         recognized_tiers = [x.get("severity") or "Neutral" for x in recognized]
-        applied_detail = treatment != "Cited by"
         row = {
             **group,
             "treatment": treatment,
@@ -535,16 +581,7 @@ class SiteBuilder:
             "recognized": recognized,
             "appearance_index": group["n"] - 1,
             "row_id": f"auth-{group['n']}",
-            # a merely-cited authority has nothing to explain; its row
-            # expands only for treatments it recognizes from other courts
-            "has_detail": bool(
-                recognized
-                or (
-                    applied_detail
-                    and (group.get("quote") or group.get("rationale"))
-                )
-            ),
-            "show_applied_detail": applied_detail,
+            # has_detail and evidence_cards are set by _cited_authorities
             "recognized_severity": worst_tier(recognized_tiers),
             "recognized_filter": worst_tier(recognized_tiers, default="none"),
         }
@@ -558,30 +595,31 @@ class SiteBuilder:
     ) -> list[JsonDict]:
         """Evidence cards for an expanded Authorities row: this opinion's
         own treatment first, then each treatment it recognizes, by
-        severity within each; every quote checked against the text."""
-        cards: list[JsonDict] = []
-        if row["show_applied_detail"]:
-            direct = row["treatment"] in DIRECT_HISTORY_TREATMENTS
-            cards.append(
-                {
-                    "order": 0 if direct else 1,
-                    "severity": row.get("severity") or "Neutral",
-                    "label": row["treatment_active"],
-                    "other_label": row.get("treatment_other_label") or "",
-                    "rationale": row.get("rationale") or "",
-                    "quote": row.get("quote") or "",
-                }
-            )
+        severity within each; every quote checked against the text. The
+        same rule as the Cited By tab picks which cards are shown
+        (select_evidence_cards)."""
+        direct = row["treatment"] in DIRECT_HISTORY_TREATMENTS
+        applied_shown = has_evidence(row["treatment"])
+        cards: list[JsonDict] = [
+            {
+                "treatment": row["treatment"],
+                "order": 0 if direct else 1,
+                "severity": row.get("severity") or "Neutral",
+                "label": row["treatment_active"],
+                "other_label": row.get("treatment_other_label") or "",
+                "rationale": row.get("rationale") or "",
+                "quote": row.get("quote") or "",
+            }
+        ]
         for i, x in enumerate(row["recognized"]):
             # a recognition without its own rationale borrows the row's,
             # which on a merely-cited row explains the recognition
             borrowed = (
-                row.get("rationale")
-                if (i == 0 and not row["show_applied_detail"])
-                else ""
+                row.get("rationale") if (i == 0 and not applied_shown) else ""
             )
             cards.append(
                 {
+                    "treatment": recognized_form(x.get("treatment") or ""),
                     "order": 2,
                     "severity": x.get("severity") or "Neutral",
                     "label": recognizes_label(x.get("treatment") or ""),
@@ -590,6 +628,7 @@ class SiteBuilder:
                     "quote": x.get("quote") or "",
                 }
             )
+        cards = select_evidence_cards(cards)
         cards.sort(key=lambda c: (c["order"], severity_rank(c["severity"])))
         cites = list(row.get("cited_as") or []) + list(
             row.get("citations") or []
@@ -647,6 +686,7 @@ class SiteBuilder:
         ]
         for row in rows:
             row["evidence_cards"] = self._authority_cards(row, streams)
+            row["has_detail"] = has_detail(row["evidence_cards"])
             self._validate_authority_row(row)
         rows.sort(
             key=lambda r: (
@@ -741,7 +781,6 @@ class SiteBuilder:
             "court": opinion_data["court"],
             "court_display": opinion_data["court_display"],
             "date_filed": opinion_data["date_filed"],
-            "disposition": opinion_data["disposition"],
             "summary": opinion_data["summary"],
         }
 
@@ -836,6 +875,7 @@ def write_site(ds: DataSource, out_dir: Path = OUT_DIR) -> JsonDict:
         ],
     )
     _write(out_dir / "treatments.json", treatment_table())
+    _write(out_dir / "treatment_definitions.json", definition_lookup())
 
     print(
         f"Wrote {len(pages)} opinion pages and {len(entries)} index entries to {out_dir}"

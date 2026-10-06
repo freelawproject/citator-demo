@@ -37,7 +37,49 @@ def test_every_opinion_in_a_chain_draws_the_same_graph(
     assert g["has_reported"] is False
     self_step = next(s for s in g["chain"] if s["role"] == "self")
     assert self_step["cluster_id"] == 2
-    assert self_step["acts"][0]["treatments"][0]["treatment"] == "Affirmed"
+    # every card says what that decision did, in the active voice; the
+    # definition shown is the page's own on its card, the past form elsewhere
+    own = self_step["acts"][0]["treatments"][0]
+    assert (own["treatment"], own["defined_as"]) == ("Affirming", "Affirming")
+    others = [
+        t
+        for s in g["chain"]
+        if s["role"] != "self"
+        for a in s["acts"]
+        for t in a["treatments"]
+    ]
+    assert others
+    assert all(t["treatment"].endswith("ing") for t in others)
+    assert all(not t["defined_as"].endswith("ing") for t in others)
+
+
+def test_decision_below_reads_the_disposition_as_the_status_row_does(
+    chain_source: DataSource,
+) -> None:
+    opinions = [dict(op) for op in chain_source.opinions]
+    opinions[0]["on_appeal"] = [
+        {"court": "Magistrate", "name": "Smith v. Jones"}
+    ]
+    opinions[0]["disposition"] = {"label": "Other", "text": "Motion denied."}
+    source = DataSource(**{**chain_source.__dict__, "opinions": opinions})
+    graph = SiteBuilder(source).history.graph(1)
+    own = next(s for s in graph["chain"] if s["role"] == "self")
+    # the "Ordered" pill opens the court's own sentence
+    assert [
+        (t["treatment"], t["text"])
+        for a in own["acts"]
+        for t in a["treatments"]
+    ] == [("Ordered", "Motion denied.")]
+    # with nothing recorded, an unnamed decision below is drawn with no
+    # name and the link carries no pill
+    opinions[0]["disposition"] = {"label": "None", "text": ""}
+    opinions[0]["on_appeal"] = [{"court": "Magistrate"}]
+    source = DataSource(**{**chain_source.__dict__, "opinions": opinions})
+    graph = SiteBuilder(source).history.graph(1)
+    own = next(s for s in graph["chain"] if s["role"] == "self")
+    below = next(s for s in graph["chain"] if s["role"] == "below")
+    assert below["case_name"] == ""
+    assert own["acts"] == []
 
 
 def test_decision_below_sits_under_the_court_that_reviewed_it(

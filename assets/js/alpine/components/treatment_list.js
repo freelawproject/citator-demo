@@ -15,16 +15,13 @@ the direction: most severe, first appearance, A, newest or most cited
 first), so reordering is a CSS `order` away and filtering is a class,
 never a rebuild of the list.
 */
-const SEVERITY_FILTERS = ['filterStop', 'filterWarning', 'filterCaution', 'filterNeutral', 'filterPositive'];
-const RECOGNIZED_FILTERS = [
-  'filterRecStop', 'filterRecWarning', 'filterRecCaution', 'filterRecNeutral', 'filterRecPositive',
-];
+const SEVERITY_FILTERS = ['filterStop', 'filterWarning', 'filterCaution', 'filterNeutral'];
+const RECOGNIZED_FILTERS = ['filterRecStop', 'filterRecWarning', 'filterRecCaution', 'filterRecNeutral'];
 const VALIDATION_FILTERS = ['filterAgree', 'filterUnverified', 'filterDisagree'];
 const TIER_OF_FILTER = {
   filterStop: 'stop', filterWarning: 'warning', filterCaution: 'caution', filterNeutral: 'neutral',
-  filterPositive: 'positive',
   filterRecStop: 'stop', filterRecWarning: 'warning', filterRecCaution: 'caution',
-  filterRecNeutral: 'neutral', filterRecPositive: 'positive',
+  filterRecNeutral: 'neutral',
   filterAgree: 'agree', filterUnverified: 'unverified', filterDisagree: 'disagree',
 };
 

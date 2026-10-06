@@ -25,7 +25,7 @@ from taxonomy import (
         ("Limited by", "Warning"),
         ("Distinguished by", "Caution"),
         ("Cited by", "Neutral"),
-        ("Affirmed by", "Positive"),
+        ("Affirmed by", "Neutral"),
         ("Something else", "Other"),
         (None, "Other"),
     ],
@@ -48,25 +48,26 @@ def test_direction_for(treatment: str, direction: str) -> None:
 
 
 def test_active_voice_and_recognized_wording() -> None:
-    assert to_active_voice("Distinguished by") == "Distinguishes"
+    assert to_active_voice("Distinguished by") == "Distinguishing"
     assert (
         to_active_voice("Affirmed in part; Reversed in part by")
-        == "Affirms in part; Reverses in part"
+        == "Affirming in part; Reversing in part"
     )
+    assert to_active_voice("Cert. denied by") == "Denying cert."
     assert (
         to_active_voice("Overruled as recognized by")
-        == "Recognizes as overruled"
+        == "Recognizing as overruled"
     )
     assert to_active_voice("Unknown by") == "Unknown"
-    assert recognizes_label("Overruled by") == "Recognizes to be overruled"
+    assert recognizes_label("Overruled by") == "Recognizing to be overruled"
     assert recognizes_label("Cert. granted as recognized by") == (
-        "Recognizes to be cert. granted"
+        "Recognizing to be cert. granted"
     )
 
 
 def test_worst_tier() -> None:
     assert worst_tier(["Neutral", "Stop", "Caution"]) == "Stop"
-    assert worst_tier(["Positive", "Neutral"]) == "Neutral"
+    assert worst_tier(["Neutral", "Caution"]) == "Caution"
     assert worst_tier([None, "Caution"]) == "Caution"
     assert worst_tier([], default="none") == "none"
 
@@ -127,25 +128,53 @@ def test_every_treatment_has_a_definition() -> None:
     assert sorted(DEFINITIONS) == sorted(SEVERITY_BY_TREATMENT)
 
 
-def test_definition_lookup_covers_every_pill_form() -> None:
+def test_definition_lookup_speaks_from_the_page() -> None:
     lookup = definition_lookup()
-    overruled = DEFINITIONS["Overruled by"]
-    assert lookup["Overruled by"] == overruled
-    assert lookup["Overrules"] == overruled
-    assert lookup["Overruled"] == overruled
-    recognized = (
-        "The citing case notes that the acting case expressly overrules "
-        "all or part of the target case."
+    # this case received the treatment: passive and past-tense forms
+    received = "A later case expressly overruled all or part of this case."
+    assert lookup["Overruled by"] == received
+    assert lookup["Overruled"] == received
+    # this case applied it: the active form
+    assert lookup["Overruling"] == (
+        "This case expressly overruled all or part of the cited case."
     )
-    assert lookup["Overruled as recognized by"] == recognized
-    assert lookup["Recognizes to be overruled"] == recognized
+    # a later case reports the treatment of this case
+    assert lookup["Overruled as recognized by"] == (
+        "A later case noted that another case expressly overruled all or "
+        "part of this case."
+    )
+    # this case reports the treatment of a cited case
+    assert lookup["Recognizing to be overruled"] == (
+        "This case noted that another case expressly overruled all or "
+        "part of the cited case."
+    )
+    # direct history names a court, and the decision below on the acting side
+    assert lookup["Reversed and remanded by"] == (
+        "On direct appeal, another court reversed this case and sent the "
+        "case back for further proceedings."
+    )
+    assert lookup["Reversing and remanding"] == (
+        "On direct appeal, this case reversed the decision below and sent "
+        "the case back for further proceedings."
+    )
     assert lookup["Reversed as recognized by"].startswith(
-        "The citing case notes that on direct appeal, the acting case"
+        "A later case noted that on direct appeal, another court reversed "
+        "this case."
     )
-    for plain in ("Cited by", "Cites", "Cited", "Cited as recognized by"):
+    assert lookup["Recognizing to be reversed"] == (
+        "This case noted that on direct appeal, another court reversed "
+        "the cited case."
+    )
+    for plain in ("Cited by", "Citing", "Cited", "Cited as recognized by"):
         assert plain not in lookup
-    assert lookup["Granted cert."] == DEFINITIONS["Cert. granted by"]
+    assert "acting case" not in " ".join(lookup.values())
     assert "Ordered" not in lookup
+
+
+def test_every_definition_fills_both_blanks() -> None:
+    lookup = definition_lookup()
+    assert all("{" not in text for text in lookup.values())
+    assert all(text[0].isupper() for text in lookup.values())
 
 
 def test_treatment_table_covers_every_label_once() -> None:
@@ -161,7 +190,6 @@ def test_treatment_table_covers_every_label_once() -> None:
         "Warning",
         "Caution",
         "Neutral",
-        "Positive",
     ]
-    positive = next(r for r in rows if r["severity"] == "Positive")
-    assert positive["direct_history"] == ["Affirmed by"]
+    neutral = next(r for r in rows if r["severity"] == "Neutral")
+    assert "Affirmed by" in neutral["direct_history"]

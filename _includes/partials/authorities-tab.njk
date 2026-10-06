@@ -52,9 +52,8 @@
             {% if flags.validation %}{{ validationDot(a.applied_validation, a.expert_treatment) }}{% endif %}
           </span>
           {% for r in a.recognized %}
-          {% set recognizedLabel = "Recognizes to be " ~ (r.treatment_past | lower) %}
           <span>
-            {{ severityBadge(r.severity, recognizedLabel, false, treatment_definitions[recognizedLabel]) }}
+            {{ severityBadge(r.severity, r.label, false, treatment_definitions[r.label]) }}
             {% if flags.validation %}{{ validationDot(r.validation, a.expert_treatment) }}{% endif %}
           </span>
           {% endfor %}

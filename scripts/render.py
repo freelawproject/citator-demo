@@ -130,7 +130,9 @@ def _group_title(name: str, info: dict[str, Any]) -> str:
         if x.get("treatment")
     ]
     if recognized:
-        lines.append("Recognizes: " + ", ".join(escape(r) for r in recognized))
+        lines.append(
+            "Recognizing: " + ", ".join(escape(r) for r in recognized)
+        )
     return "&#10;".join(lines)
 
 

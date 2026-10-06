@@ -14,10 +14,6 @@
     {%- set variant = "severity-badge--warning" -%}{%- set glyph = "severity-warning" -%}
   {%- elif severity == "Caution" -%}
     {%- set variant = "severity-badge--caution" -%}{%- set glyph = "severity-caution" -%}
-  {%- elif severity == "Positive" or "affirm" in (label | lower) -%}
-    {# the positive tier: an affirmance in any form. Display only; the
-       underlying severity stays Neutral #}
-    {%- set variant = "severity-badge--affirmed" -%}{%- set glyph = "severity-affirmed" -%}
   {%- else -%}
     {%- set variant = "severity-badge--neutral" -%}{%- set glyph = "severity-neutral" -%}
   {%- endif -%}

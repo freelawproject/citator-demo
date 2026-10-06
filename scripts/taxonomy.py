@@ -2,8 +2,9 @@
 wording each side of a treatment uses.
 
 A treatment label is written from the cited case's side ("Distinguished
-by"). The Authorities tab speaks from the citing opinion's side, so labels
-are rewritten to the active voice there ("Distinguishes"). A treatment the
+by"). The Authorities tab, the disposition and the History tab's cards
+speak from the acting opinion's side, so labels are rewritten to the
+active voice there ("Distinguishing"). A treatment the
 citing opinion only reports another court applying is the "as recognized
 by" form ("Overruled as recognized by"); it keeps the severity of the
 underlying treatment.
@@ -38,17 +39,15 @@ SEVERITY_BY_TREATMENT: dict[str, str] = {
     "Dismissed by": "Neutral",
     "Cert. denied by": "Neutral",
     "Cited by": "Neutral",
-    # Positive
-    "Affirmed by": "Positive",
+    "Affirmed by": "Neutral",
 }
 
-# most serious first; Positive (an affirmance) ranks after Neutral
+# most serious first
 SEVERITY_ORDER: tuple[str, ...] = (
     "Stop",
     "Warning",
     "Caution",
     "Neutral",
-    "Positive",
 )
 SEVERITY_RANK: dict[str, int] = {
     tier: rank for rank, tier in enumerate(SEVERITY_ORDER)
@@ -78,124 +77,119 @@ VERTICAL_OR_SELF_TREATMENTS = DIRECT_HISTORY_TREATMENTS | {
     "Abrogated by",
 }
 
+# What the acting opinion does, as the Authorities tab, the disposition
+# and the History tab's cards show it.
 ACTIVE_VOICE: dict[str, str] = {
-    "Reversed by": "Reverses",
-    "Reversed and remanded by": "Reverses and remands",
-    "Vacated by": "Vacates",
-    "Vacated and remanded by": "Vacates and remands",
-    "Overruled by": "Overrules",
-    "Abrogated by": "Abrogates",
-    "Questioned by": "Questions",
-    "Affirmed in part; Reversed in part by": "Affirms in part; Reverses in part",
-    "Affirmed in part; Vacated in part by": "Affirms in part; Vacates in part",
-    "Disapproved by": "Disapproves",
-    "Limited by": "Limits",
-    "Remanded by": "Remands",
-    "Cert. granted by": "Granted cert.",
-    "Criticized by": "Criticizes",
-    "Distinguished by": "Distinguishes",
-    "Declined to follow by": "Declines to follow",
-    "Dismissed by": "Dismisses",
-    "Affirmed by": "Affirms",
-    "Cert. denied by": "Denied cert.",
-    "Cited by": "Cites",
+    "Reversed by": "Reversing",
+    "Reversed and remanded by": "Reversing and remanding",
+    "Vacated by": "Vacating",
+    "Vacated and remanded by": "Vacating and remanding",
+    "Overruled by": "Overruling",
+    "Abrogated by": "Abrogating",
+    "Questioned by": "Questioning",
+    "Affirmed in part; Reversed in part by": (
+        "Affirming in part; Reversing in part"
+    ),
+    "Affirmed in part; Vacated in part by": (
+        "Affirming in part; Vacating in part"
+    ),
+    "Disapproved by": "Disapproving",
+    "Limited by": "Limiting",
+    "Remanded by": "Remanding",
+    "Cert. granted by": "Granting cert.",
+    "Criticized by": "Criticizing",
+    "Distinguished by": "Distinguishing",
+    "Declined to follow by": "Declining to follow",
+    "Dismissed by": "Dismissing",
+    "Affirmed by": "Affirming",
+    "Cert. denied by": "Denying cert.",
+    "Cited by": "Citing",
 }
 
 RECOGNIZED_SUFFIX = " as recognized by"
 
 # What each treatment means, shown when a pill is hovered or focused.
-# "Acting case" is the opinion applying the treatment, "target case" the
-# one receiving it; the About page says so above the treatment table.
+# Each is written once, with {actor} for the opinion applying the
+# treatment and {target} for the one receiving it; `definition_lookup`
+# fills the two from the reader's side, so the opinion on the page is
+# always "this case" (see the fillers above that function).
 DEFINITIONS: dict[str, str] = {
     # Direct History
-    "Reversed by": (
-        "On direct appeal, the acting case reverses the target court's "
-        "decision."
-    ),
+    "Reversed by": "On direct appeal, {actor} reversed {target}.",
     "Reversed and remanded by": (
-        "On direct appeal, the acting case reverses the target court's "
-        "decision and sends the case back to the target court for "
-        "further proceedings."
+        "On direct appeal, {actor} reversed {target} and sent the case "
+        "back for further proceedings."
     ),
     "Vacated and remanded by": (
-        "On direct appeal, the acting case sets aside the target court's "
-        "decision, leaving it without legal effect, and sends the case "
-        "back to the target court for further proceedings."
+        "On direct appeal, {actor} set aside {target}, leaving it without "
+        "legal effect, and sent the case back for further proceedings."
     ),
     "Vacated by": (
-        "On direct appeal, the acting case sets aside the target court's "
-        "decision, leaving it without legal effect."
+        "On direct appeal, {actor} set aside {target}, leaving it without "
+        "legal effect."
     ),
     "Affirmed in part; Reversed in part by": (
-        "On direct appeal, the acting case affirms part of the target "
-        "case while reversing other parts of it."
+        "On direct appeal, {actor} affirmed part of {target} and reversed "
+        "other parts of it."
     ),
     "Affirmed in part; Vacated in part by": (
-        "On direct appeal, the acting case affirms part of the target "
-        "case while vacating other parts of it."
+        "On direct appeal, {actor} affirmed part of {target} and set aside "
+        "other parts of it."
     ),
     "Remanded by": (
-        "On direct appeal, the acting case sends the case back to the "
-        "target court for further proceedings."
+        "On direct appeal, {actor} sent {target} back for further proceedings."
     ),
     "Cert. granted by": (
-        "On a petition for review, the acting case agrees to hear an "
-        "appeal of the target case."
+        "On a petition for review, {actor} agreed to hear an appeal of "
+        "{target}."
     ),
     "Dismissed by": (
-        "On direct appeal, the acting case ends the appeal without "
+        "On direct appeal, {actor} ended the appeal of {target} without "
         "deciding its merits."
     ),
-    "Affirmed by": (
-        "On direct appeal, the acting case affirms the target court's "
-        "decision."
-    ),
+    "Affirmed by": "On direct appeal, {actor} affirmed {target}.",
     "Cert. denied by": (
-        "On a petition for review, the acting case refuses to hear an "
-        "appeal of the target case."
+        "On a petition for review, {actor} refused to hear an appeal of "
+        "{target}."
     ),
     # Citing Reference
-    "Overruled by": (
-        "The acting case expressly overrules all or part of the target case."
-    ),
+    "Overruled by": "{actor} expressly overruled all or part of {target}.",
     "Abrogated by": (
-        "The acting case effectively, but not explicitly, overrules all "
-        "or part of the target case."
+        "{actor} effectively, but not explicitly, overruled all or part of "
+        "{target}."
     ),
     "Questioned by": (
-        "The acting case questions the continuing validity or "
-        "precedential value of the target case, either because another "
-        "decision implicitly undermines it or because of intervening "
-        "events such as judicial or legislative overruling."
+        "{actor} questioned the continuing validity or precedential value "
+        "of {target}, either because another decision implicitly "
+        "undermines it or because of intervening events such as judicial "
+        "or legislative overruling."
     ),
     "Disapproved by": (
-        "The acting case expressly or implicitly disapproves all or part "
-        "of the target case for its reasoning or result and reaches a "
-        "contrary holding, but does not overrule it."
+        "{actor} expressly or implicitly disapproved all or part of "
+        "{target} for its reasoning or result and reached a contrary "
+        "holding, but did not overrule it."
     ),
     "Limited by": (
-        "The acting case narrows the scope or applicability of the "
-        "target case rather than extending it or accepting it as "
-        "authoritative."
+        "{actor} narrowed the scope or applicability of {target} rather "
+        "than extending it or accepting it as authoritative."
     ),
     "Criticized by": (
-        "The acting case criticizes all or part of the target case's "
-        "reasoning but, unlike Disapproved, does not reach a contrary "
-        "holding, or the criticism is dicta."
+        "{actor} criticized all or part of the reasoning of {target} but, "
+        "unlike Disapproved, did not reach a contrary holding, or the "
+        "criticism is dicta."
     ),
     "Distinguished by": (
-        "The acting case reaches a different result because its facts, "
-        "procedural posture or law differ from the target case's. "
-        "Sometimes also called declined to extend."
+        "{actor} reached a different result because its facts, procedural "
+        "posture or law differ from those of {target}. Sometimes also "
+        "called declined to extend."
     ),
     "Declined to follow by": (
-        "The acting case chooses not to apply the reasoning or ruling of "
-        "the target case, and no more specific treatment applies."
+        "{actor} chose not to apply the reasoning or ruling of {target}, "
+        "and no more specific treatment applies."
     ),
     "Cited by": (
-        "The acting case cites, references, discusses, interprets, "
-        "clarifies or explains the target case without treating it "
-        "negatively."
+        "{actor} cited, referenced, discussed, interpreted, clarified or "
+        "explained {target} without treating it negatively."
     ),
 }
 
@@ -210,17 +204,6 @@ def has_evidence(treatment: str) -> bool:
     form: every treatment but a plain citation. The Authorities and Cited
     By tabs share this rule."""
     return base_treatment(treatment) != PLAIN_CITATION
-
-
-# Related Reference: the "X as recognized by" form of any label opens
-# with this and continues with the root treatment's definition.
-RECOGNIZED_PREFIX = "The citing case notes that "
-
-
-def recognized_definition(text: str) -> str:
-    """ "The acting case overrules…" → "The citing case notes that the
-    acting case overrules…"."""
-    return RECOGNIZED_PREFIX + text[:1].lower() + text[1:]
 
 
 def is_recognized(treatment: str) -> bool:
@@ -272,19 +255,19 @@ def direction_for(treatment: str) -> str:
 
 
 def to_active_voice(treatment: str) -> str:
-    """What the citing opinion does: "Distinguished by" → "Distinguishes",
-    "Overruled as recognized by" → "Recognizes as overruled"."""
+    """What the acting opinion does: "Distinguished by" → "Distinguishing",
+    "Overruled as recognized by" → "Recognizing as overruled"."""
     if treatment in ACTIVE_VOICE:
         return ACTIVE_VOICE[treatment]
     if is_recognized(treatment):
-        return f"Recognizes as {past_tense(treatment).lower()}"
+        return f"Recognizing as {past_tense(treatment).lower()}"
     return treatment.removesuffix(" by")
 
 
 def recognizes_label(treatment: str) -> str:
     """Pill text for a treatment this opinion reports another court
-    applied: "Recognizes to be overruled"."""
-    return f"Recognizes to be {past_tense(treatment).lower()}"
+    applied: "Recognizing to be overruled"."""
+    return f"Recognizing to be {past_tense(treatment).lower()}"
 
 
 def validate_pills(pills: list[dict[str, Any]], expert: str) -> list[str]:
@@ -349,22 +332,61 @@ def row_validation(states: list[str]) -> str:
     return "unverified"
 
 
+# The definitions speak from the reader's side: the opinion on the page
+# is "this case" whichever role it plays, and the other party is named by
+# what it is to this case.
+THIS_CASE = "this case"
+CITED_CASE = "the cited case"
+# the other party when this case received the treatment
+ACTOR_ON_THIS_CASE = {"direct": "another court", "citing": "a later case"}
+# the other party when this case applied the treatment
+TARGET_OF_THIS_CASE = {"direct": "the decision below", "citing": CITED_CASE}
+# the court whose act is only reported, by this case or by a later one
+REPORTED_ACTOR = {"direct": "another court", "citing": "another case"}
+
+
+def _kind(label: str) -> str:
+    return "direct" if label in DIRECT_HISTORY_TREATMENTS else "citing"
+
+
+def _definition(label: str, actor: str, target: str) -> str:
+    text = DEFINITIONS[label].format(actor=actor, target=target)
+    return text[:1].upper() + text[1:]
+
+
+def _reported(reporter: str, text: str) -> str:
+    """ "Another court reversed this case." → "A later case noted that
+    another court reversed this case."."""
+    return f"{reporter} noted that {text[:1].lower()}{text[1:]}"
+
+
 def definition_lookup() -> dict[str, str]:
-    """Every display form of each label, mapped to its definition, for
-    the pills' tooltips: passive ("Overruled by"), active ("Overrules"),
-    past tense ("Overruled") and both recognized forms ("Overruled as
-    recognized by", "Recognizes to be overruled"). Labels in NO_TOOLTIP
-    are left out in every form."""
+    """Every display form of each label, mapped to its definition from
+    the reader's side, for the pills' tooltips. The passive ("Overruled
+    by") and past-tense ("Overruled") forms are shown where this case
+    received the treatment; the active form ("Overruling") where it
+    applied it; "Overruled as recognized by" where a later case reports
+    the treatment of this case, and "Recognizing to be overruled" where
+    this case reports the treatment of a cited case. Labels in
+    NO_TOOLTIP are left out in every form."""
     lookup: dict[str, str] = {}
-    for label, text in DEFINITIONS.items():
+    for label in DEFINITIONS:
         if label in NO_TOOLTIP:
             continue
-        lookup[label] = text
-        lookup[to_active_voice(label)] = text
-        lookup[past_tense(label)] = text
-        recognized = recognized_definition(text)
-        lookup[recognized_form(label)] = recognized
-        lookup[recognizes_label(label)] = recognized
+        kind = _kind(label)
+        received = _definition(label, ACTOR_ON_THIS_CASE[kind], THIS_CASE)
+        lookup[label] = received
+        lookup[past_tense(label)] = received
+        lookup[to_active_voice(label)] = _definition(
+            label, THIS_CASE, TARGET_OF_THIS_CASE[kind]
+        )
+        lookup[recognized_form(label)] = _reported(
+            "A later case",
+            _definition(label, REPORTED_ACTOR[kind], THIS_CASE),
+        )
+        lookup[recognizes_label(label)] = _reported(
+            "This case", _definition(label, REPORTED_ACTOR[kind], CITED_CASE)
+        )
     return lookup
 
 

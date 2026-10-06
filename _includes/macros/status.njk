@@ -1,16 +1,32 @@
-{# The status rows shared by the search cards and the opinion page: what
-   this opinion decided (Disposition), what happened to it on appeal, and
-   how later courts treat it.
+{# The status rows shared by the home cards and the opinion page: what
+   this opinion decided (Disposition, opinion page only), what happened
+   to it on appeal, and how later courts treat it.
 
    `st` is the opinion's `status` (build_data.home_status): `scope`
    ("controlling" for the anchors' complete citing set, "collection"
    elsewhere), `on_appeal` and `later_courts`. `disposition` is
-   {label, severity, text} or nothing. `defs` is the page's
+   {label, severity, text} or nothing; with a `text` the pill opens
+   that sentence. `defs` is the page's
    treatment_definitions data, for the pills' tooltips. A treated row is
    one link to the citing opinion's Authorities row for this case
    (`#authority-N`). #}
 {% from "macros/treatment.njk" import severityBadge %}
 {% from "macros/icons.njk" import icon %}
+
+{# A disposition pill. An order with no label of its own (`text` set)
+   renders as the "Ordered" pill that opens the sentence that disposed of
+   the case; a named disposition as a pill with its definition. #}
+{% macro dispositionBadge(severity, label, text, definition="") %}
+{%- if text %}
+<details class="disposition">
+  <summary class="disposition__summary" title="Show what the court ordered">
+    {{ severityBadge(severity, label) }}
+    {{ icon("chevron-right", "w-3.5 h-3.5 expand-chevron text-greyscale-400") }}
+  </summary>
+  <p class="disposition__text">{{ text }}</p>
+</details>
+{%- else %}{{ severityBadge(severity, label, false, definition) }}{% endif %}
+{% endmacro %}
 
 {% macro statusLink(x, label, definition="") %}
 {%- set href = "/opinion/" ~ x.citing_cluster_id ~ "/" -%}
@@ -25,8 +41,10 @@
 </a>
 {% endmacro %}
 
-{# `filled_only` (the search cards) drops a row that has nothing to say;
-   the opinion page keeps every row, empty states included. #}
+{# `filled_only` (the home cards) drops a row that has nothing to say;
+   the opinion page keeps every row, empty states included, counting
+   Later courts to zero. The home cards pass no `disposition`, so they
+   never show that row. #}
 {% macro statusRows(st, disposition, defs, extra="", filled_only=false) %}
 {% set showDisposition = disposition or not filled_only %}
 {% set showAppeal = st.on_appeal.state == "treated" or not filled_only %}
@@ -36,19 +54,10 @@
   {% if showDisposition %}
   <dt>Disposition</dt>
   <dd>
-    {% if disposition and disposition.text %}
-      {# no label of its own: the pill opens the sentence that disposed of the case #}
-      <details class="disposition">
-        <summary class="disposition__summary" title="Show what the court ordered">
-          {{ severityBadge(disposition.severity, disposition.label, false, defs[disposition.label]) }}
-          {{ icon("chevron-right", "w-3.5 h-3.5 expand-chevron text-greyscale-400") }}
-        </summary>
-        <p class="disposition__text">{{ disposition.text }}</p>
-      </details>
-    {% elif disposition %}
-      {{ severityBadge(disposition.severity, disposition.label, false, defs[disposition.label]) }}
+    {% if disposition %}
+      {{ dispositionBadge(disposition.severity, disposition.label, disposition.text, defs[disposition.label]) }}
     {% else %}
-      <span class="home-status__muted">Not identified</span>
+      <span class="home-status__text">Not identified</span>
     {% endif %}
   </dd>
   {% endif %}
@@ -58,13 +67,13 @@
     {% if st.on_appeal.state == "treated" %}
       {{ statusLink(st.on_appeal, st.on_appeal.treatment, defs[st.on_appeal.treatment]) }}
     {% elif st.on_appeal.state == "not_reviewable" %}
-      <span class="home-status__muted">Court of last resort</span>
+      <span class="home-status__text">No appeal found <span class="home-status__sep" aria-hidden="true">·</span> court of last resort</span>
     {% elif st.scope == "collection" %}
-      <span class="home-status__muted">None in this collection</span>
+      <span class="home-status__text">None in this collection</span>
     {% elif st.on_appeal.state == "unknown" %}
-      <span class="home-status__muted">Not collected yet</span>
+      <span class="home-status__text">Not collected yet</span>
     {% else %}
-      <span class="home-status__muted">No appeal found</span>
+      <span class="home-status__text">No appeal found</span>
     {% endif %}
   </dd>
   {% endif %}
@@ -79,12 +88,10 @@
       </span>
     {% elif st.later_courts.state == "plain" %}
       <span class="home-status__text">Cited by {{ st.later_courts.n_total }} {% if st.scope == "controlling" %}controlling {% endif %}opinion{% if st.later_courts.n_total != 1 %}s{% endif %}{% if st.scope == "collection" %} in this collection{% endif %}, none negative</span>
-    {% elif st.scope == "collection" %}
-      <span class="home-status__muted">No opinion in this collection cites it</span>
     {% elif st.later_courts.state == "unknown" %}
-      <span class="home-status__muted">Not collected yet</span>
+      <span class="home-status__text">Not collected yet</span>
     {% else %}
-      <span class="home-status__muted">No controlling opinion cites it</span>
+      <span class="home-status__text">Cited by 0 {% if st.scope == "controlling" %}controlling {% endif %}opinions{% if st.scope == "collection" %} in this collection{% endif %}</span>
     {% endif %}
   </dd>
   {% endif %}

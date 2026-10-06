@@ -6,7 +6,7 @@
    from the decision before; `levels` names the court columns. Grid placement is
    passed to the stylesheet as custom properties. The cards are emitted
    newest first, so the narrow-screen single column reads top-down too. #}
-{% from "macros/treatment.njk" import severityBadge %}
+{% from "macros/status.njk" import dispositionBadge %}
 {% from "macros/icons.njk" import icon %}
 
 {% set history = opinion.appellate_history %}
@@ -29,11 +29,13 @@
          style="--col: {{ step.col }}; --row: {{ step.row }}">
       <p class="history-node__court">{{ step.court }}</p>
       <p class="history-node__tier">{{ step.tier }}</p>
+      {% if step.case_name %}
       <p class="history-node__case">
         {% if step.role == "reported" %}As reported by {% endif %}
         {% if step.url %}<a href="{{ step.url }}" class="history-node__link">{{ step.case_name }}</a>
         {% else %}{{ step.case_name }}{% endif %}
       </p>
+      {% endif %}
       {% if step.role == "self" %}<p class="history-node__here">This opinion</p>{% endif %}
       {% if step.cluster_id %}
       <details class="history-node__meta">
@@ -51,10 +53,9 @@
       </details>
       {% endif %}
       {% for act in step.acts %}
-      <p class="history-node__act">
-        {% for t in act.treatments %}{{ severityBadge(t.severity, t.treatment, false, treatment_definitions[t.treatment]) }}{% endfor %}
-        <span class="history-node__act-target">{{ act.target }}</span>
-      </p>
+      <div class="history-node__act">
+        {% for t in act.treatments %}{{ dispositionBadge(t.severity, t.treatment, t.text, treatment_definitions[t.defined_as]) }}{% endfor %}
+      </div>
       {% endfor %}
       {% if step.role == "reported" %}
       <p class="history-node__flag">

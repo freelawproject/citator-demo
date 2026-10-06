@@ -45,28 +45,28 @@ scripts:
 
       <div class="filter-group">
         <span class="filter-group__title">Severity</span>
-        {# one row of toggles per question (what the opinion decided, what
-           happened on appeal, how later courts treat it), most severe on
-           the left; each toggle names its tier on hover and to assistive
-           technology #}
+        {# one list of toggles per question (what happened on appeal, how
+           later courts treat it), the two side by side, most severe at
+           the top, each naming its tier; the group names the question #}
+        <div class="sev-groups">
         {% for direction in [
-          {"label": "Disposition", "prefix": "filterDisp"},
           {"label": "On appeal", "prefix": "filterDh"},
           {"label": "Later courts", "prefix": "filterCr"}
         ] %}
         <div class="sev-group" role="group" aria-label="{{ direction.label }} severity">
           <p class="sev-group__title">{{ direction.label }}</p>
-          <div class="sev-grid">
-            {% for tier in ["Stop", "Warning", "Caution", "Neutral", "Positive"] %}
+          <div class="sev-list">
+            {% for tier in ["Stop", "Warning", "Caution", "Neutral"] %}
             <button type="button" role="checkbox" class="sev-toggle sev-toggle--{{ tier | lower }}" data-filter="{{ direction.prefix }}{{ tier }}"
-                    x-bind:aria-checked="filterOn" x-bind:class="filterClass" x-on:click="toggleFilter"
-                    aria-label="{{ direction.label }}: {{ tier }}" title="{{ direction.label }}: {{ tier }}">
-              {{ icon("severity-" ~ ("affirmed" if tier == "Positive" else tier | lower), "sev-toggle__icon") }}
+                    x-bind:aria-checked="filterOn" x-bind:class="filterClass" x-on:click="toggleFilter">
+              <span class="sev-toggle__dot" aria-hidden="true">{{ icon("severity-" ~ (tier | lower), "sev-toggle__icon") }}</span>
+              <span class="sev-toggle__label">{{ tier }}</span>
             </button>
             {% endfor %}
           </div>
         </div>
         {% endfor %}
+        </div>
         <button type="button" class="severity-clear" x-on:click="clearSeverityFilters" x-show="hasSeverityFilters" x-cloak>Clear severity filters</button>
       </div>
 
@@ -90,7 +90,6 @@ scripts:
         data-court="{{ case.court }}"
         data-tier="{{ case.tier }}"
         data-search="{{ case.search_text }}"
-        data-disp-severity="{{ case.disposition.severity | lower if case.disposition else 'none' }}"
         data-dh-severity="{{ case.summary.dh_severity | lower if case.summary.dh_severity else 'none' }}"
         data-cr-severity="{{ case.summary.cr_severity | lower if case.summary.cr_severity else 'none' }}"
         x-show="rowVisible"
@@ -113,7 +112,7 @@ scripts:
               {% endif %}
             </dl>
           </div>
-          {{ statusRows(case.status, case.disposition, treatment_definitions, "", true) }}
+          {{ statusRows(case.status, false, treatment_definitions, "", true) }}
           {% if case.excerpt %}
           <p class="home-snippet">{{ case.excerpt }}</p>
           {% endif %}

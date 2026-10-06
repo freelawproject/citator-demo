@@ -66,7 +66,7 @@ eleventyComputed:
         <div><dt>File Date</dt><dd>{{ opinion.date_filed }}</dd></div>
         {% if opinion.docket_numbers | length %}<div><dt>Docket Number</dt><dd>{{ citeList(opinion.docket_numbers, noun="docket number") }}</dd></div>{% endif %}
         {% if opinion.citations | length %}
-        <div class="basis-full"><dt>Citations</dt><dd>{% for c in opinion.citations %}{{ c }}{% if not loop.last %} <span class="cite-list__dot" aria-hidden="true">·</span> {% endif %}{% endfor %}</dd></div>
+        <div class="basis-full"><dt>Citations</dt><dd>{{ citeList(opinion.citations, dot=true) }}</dd></div>
         {% endif %}
       </dl>
     </header>

@@ -70,10 +70,10 @@ permalink: /about/
 
     <h3>The opinion list</h3>
     <p>
-      The home page lists every opinion in the preview, newest first. Search by case name <em>or</em> by citation. Filter by court through the court picker, or by severity: a row of five toggles, most severe on the left, for each of what the opinion decided, what happened to the case on appeal, and how later courts have treated it. Selecting several shows every opinion that matches any of them. <strong>Anchor opinions only</strong> starts switched on, which narrows the list to the ten cases the preview is built around — clear it to browse everything.
+      The home page lists every opinion in the preview, newest first. Search by case name <em>or</em> by citation. Filter by court through the court picker, or by severity: a list of four toggles, most severe at the top, for each of what happened to the case on appeal and how later courts have treated it. Selecting several shows every opinion that matches any of them. <strong>Anchor opinions only</strong> starts switched on, which narrows the list to the ten cases the preview is built around — clear it to browse everything.
     </p>
     <p>
-      Each card carries up to three Citator classes: <strong>Disposition</strong>, what the court decided, in the court's own words (<em>Affirmed</em>, <em>Reversed and remanded</em>, or <em>Ordered</em> when the order is none of the named kinds); <strong>On appeal</strong>, what happened to the case as it moved through the courts; and <strong>Later courts</strong>, how later cases have treated it. A class only appears when there is something to report. Where a card shows a treatment, clicking it opens the citing opinion at its entry for this case.
+      Each card carries up to two Citator classes: <strong>On appeal</strong>, what happened to the case as it moved through the courts; and <strong>Later courts</strong>, how later cases have treated it. A class appears only when there is something to report; the opinion page shows every class, counting Later courts to zero when nothing cites the case, and adds a third, <strong>Disposition</strong>: what the court decided (<em>Affirming</em>, <em>Reversing and remanding</em>, or <em>Ordered</em> when the order is none of the named kinds, which opens the sentence that disposed of the case). Where a card shows a treatment, clicking it opens the citing opinion at its entry for this case.
     </p>
 
     <h3>The opinion page</h3>
@@ -93,7 +93,7 @@ permalink: /about/
       </div>
       <div class="about-card">
         <strong>History</strong>
-        <span>The case's route through the court system, drawn on two axes: courts along the bottom, lowest on the left and highest on the right, and time up the side, oldest at the bottom and newest at the top. An appeal moves up and to the right; a remand comes back to the left. Each card says what that court did, and opens its details.</span>
+        <span>The case's route through the court system, drawn on two axes: courts along the bottom, lowest on the left and highest on the right, and time up the side, oldest at the bottom and newest at the top. An appeal moves up and to the right; a remand comes back to the left. Each card says what that court did, as that court did it (<em>Reversing</em>, <em>Affirming in part; Vacating in part</em>, or <em>Ordered</em>, which opens the court's own sentence); the path shows which decision it acted on. The highlighted card is the opinion you are reading, and a card's details open on request.</span>
       </div>
     </div>
 
@@ -116,9 +116,7 @@ permalink: /about/
       <dt>{{ severityBadge("Caution", "Caution") }}</dt>
       <dd>Intact but applicability is qualified.</dd>
       <dt>{{ severityBadge("Neutral", "Neutral") }}</dt>
-      <dd>Stands; citation is informational or procedural.</dd>
-      <dt>{{ severityBadge("Positive", "Positive") }}</dt>
-      <dd>Affirmed on appeal.</dd>
+      <dd>Stands; the citation is informational or procedural, or the case was affirmed on appeal.</dd>
     </dl>
 
     <h3>Disposition, On appeal and Later courts</h3>
@@ -126,9 +124,9 @@ permalink: /about/
       For every opinion the citator identifies what the court itself decided, what then happened to the case, and how later cases have treated it. The three answer different questions and should not be read as one signal.
     </p>
     <ul class="about-list">
-      <li><strong>Disposition</strong> — what this opinion did with the case in front of it, in the past tense as the court states it: affirmed, reversed, vacated, remanded, or a mix. An order that is none of those, such as a motion decided or a petition dismissed, shows as <em>Ordered</em>, and opens the sentence that disposed of the case.</li>
-      <li><strong>On appeal</strong> — what happened to this case afterwards, as it moved further through the courts. Was this decision itself affirmed, reversed, vacated, or remanded? The citator works this out from the later opinions that cite this one, so a step can only appear where a later opinion cites or names this case.</li>
-      <li><strong>Later courts</strong> — what later, unrelated cases said about the rule the case established. Did they follow it, distinguish it, criticize it, or overrule it? This is the signal for whether the case is still good law in practice.</li>
+      <li><strong>Disposition</strong> — what this opinion did with the case in front of it: affirming, reversing, vacating, remanding, or a mix. An order that is none of those, such as a motion decided or a petition dismissed, shows as <em>Ordered</em>, and opens the sentence that disposed of the case, on the status row and on the History tab alike.</li>
+      <li><strong>On appeal</strong> — what happened to this case afterwards, as it moved further through the courts. Was this decision itself affirmed, reversed, vacated, or remanded? The citator works this out from the later opinions that cite this one, counting what a later opinion reports another court did to this case, so a step can only appear where a later opinion cites or names this case.</li>
+      <li><strong>Later courts</strong> — what later, unrelated cases said about the rule the case established. Did they follow it, distinguish it, criticize it, or overrule it? This is the signal for whether the case is still good law in practice. For the anchors the count covers every citing opinion from a controlling court; for every other case it covers the opinions in this preview, so <em>Cited by 0 opinions in this collection</em> means none of them cites it, not that nothing does.</li>
     </ul>
 
     <h3>Other things to notice</h3>
@@ -139,7 +137,7 @@ permalink: /about/
       </div>
       <div class="about-card">
         <strong>What a court reports, versus what it does</strong>
-        <span>Under the citing court's own treatment, a pill reading <em>Recognizes to be…</em> on Authorities — <em>… as recognized by</em> on Cited By — is a treatment the court is not applying itself, but reporting: how another court has already treated the case.</span>
+        <span>Under the citing court's own treatment, a pill reading <em>Recognizing to be…</em> on Authorities — <em>… as recognized by</em> on Cited By — is a treatment the court is not applying itself, but reporting: how another court has already treated the case.</span>
       </div>
       <div class="about-card">
         <strong>Every treatment shows its evidence</strong>
@@ -163,7 +161,7 @@ permalink: /about/
         <span>See the full treatment list</span>
       </summary>
       <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
-        Hover over or focus any treatment, here or anywhere on the site, for its definition. In the definitions, the <em>acting case</em> is the opinion applying the treatment and the <em>target case</em> is the one receiving it.
+        Hover over or focus any treatment, here or anywhere on the site, for its definition. Each definition is written from the page you are on: <em>this case</em> is the opinion you are looking at, whether it applied the treatment or received it. The definitions below read as if this case received the treatment.
       </p>
       <div class="table-wrap">
         <table class="about-table">

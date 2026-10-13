@@ -88,6 +88,39 @@ def court_state(ds: DataSource, key: str) -> str:
     return ""
 
 
+def court_relation(ds: DataSource, cited: str, citing: str) -> str:
+    """How a citing court stands to the cited one: "controlling" (a
+    higher court whose decisions bind it), "equal" (the same court, or
+    the same level in the same system) or "other" (persuasive only). The
+    Supreme Court of the United States controls every other court; a
+    federal court of appeals controls every district court (a district's
+    own circuit is not modelled, so every circuit counts); a state court
+    is controlled by, or equal to, courts of its own state only."""
+    if citing == cited:
+        return "equal"
+    cited_cat = ds.court_category.get(cited, "")
+    citing_cat = ds.court_category.get(citing, "")
+    if citing_cat == "scotus":
+        return "controlling"
+    if cited_cat == "scotus":
+        return "other"
+    if ds.category_jurisdiction.get(cited_cat) != ds.category_jurisdiction.get(
+        citing_cat
+    ):
+        return "other"
+    if ds.category_jurisdiction.get(cited_cat) == "state" and court_state(
+        ds, cited
+    ) != court_state(ds, citing):
+        return "other"
+    cited_level = ds.court_level.get(cited, 99)
+    citing_level = ds.court_level.get(citing, 99)
+    if citing_level < cited_level:
+        return "controlling"
+    if citing_level == cited_level:
+        return "equal"
+    return "other"
+
+
 def _display(ds: DataSource, key: str) -> str:
     return ds.court_display.get(key, key)
 

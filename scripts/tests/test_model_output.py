@@ -10,6 +10,7 @@ from model_output import (
     document_token_streams,
     expand_quote,
     is_case_group,
+    mark_case_in_quote,
     quote_names_case,
     sentence_bounds,
     verify_quote,
@@ -112,15 +113,13 @@ def test_disposition_forms() -> None:
     assert disposition_label(
         {"label": "Reversed and remanded", "text": "x"}
     ) == {
-        "label": "Reversing and remanding",
-        "severity": "Stop",
+        "label": "Reverses and remands",
         "text": "",
     }
     assert disposition_label(
         {"label": "Other", "text": "Motion granted."}
     ) == {
         "label": "Ordered",
-        "severity": "Neutral",
         "text": "Motion granted.",
     }
     assert disposition_label({"label": "None", "text": ""}) is None
@@ -225,6 +224,26 @@ def test_verify_quote_statuses() -> None:
         == "missing"
     )
     assert verify_quote(streams, "too short")["status"] == "short"
+
+
+def test_mark_case_in_quote() -> None:
+    assert mark_case_in_quote(
+        "See 552 U.S. 38, 41 & <n>.", ["552 U.S. 38"], "Gall v. US"
+    ) == (
+        'See <strong class="evidence-card__case">552 U.S. 38</strong>, 41 '
+        "&amp; &lt;n&gt;."
+    )
+    # the first party's name, in full, every time it appears
+    assert mark_case_in_quote(
+        "As Pearson explained, Pearson controls.", [], "Pearson v. Callahan"
+    ) == (
+        'As <strong class="evidence-card__case">Pearson</strong> explained, '
+        '<strong class="evidence-card__case">Pearson</strong> controls.'
+    )
+    # nothing to mark: the quote comes back escaped and unchanged
+    assert mark_case_in_quote("As Gall explained,", [], "Gall v. US") == (
+        "As Gall explained,"
+    )
 
 
 def test_quote_names_case() -> None:

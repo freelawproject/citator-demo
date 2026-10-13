@@ -31,13 +31,14 @@ import re
 from pathlib import Path
 from typing import Any
 
-from courts import court_list, court_picker_tabs
+from courts import court_list, court_picker_tabs, court_relation
 from data_source import DataSource, JsonDict, short_date
 from history import AppellateHistory
 from model_output import (
     disposition_label,
     document_token_streams,
     expand_quote,
+    mark_case_in_quote,
     quote_names_case,
     verify_quote,
 )
@@ -167,9 +168,9 @@ def _stamp_ranks(rows: list[JsonDict], keys: dict[str, Any]) -> None:
             row[field] = rank
 
 
-# ── Cited By rows ───────────────────────────────────────────────────────
+# ── Later Courts rows ───────────────────────────────────────────────────────
 def _pill(kind: str, row: JsonDict) -> JsonDict:
-    """One treatment on a Cited By row: what the citing opinion did
+    """One treatment on a Later Courts row: what the citing opinion did
     (applied) or reports another court did (recognized)."""
     return {
         "kind": kind,
@@ -194,6 +195,7 @@ def _evidence_card(pill: JsonDict, label: str) -> JsonDict:
         "quote": evidence.get("quote", ""),
         "quote_status": evidence.get("quote_status", ""),
         "quote_names": evidence.get("quote_names", ""),
+        "quote_html": evidence.get("quote_html", ""),
     }
 
 
@@ -272,7 +274,9 @@ def group_cited_by(rows: list[JsonDict]) -> list[JsonDict]:
 
 def sort_cited_by(rows: list[JsonDict]) -> list[JsonDict]:
     """DOM order: severity, then newest first. Each row also carries its
-    rank under every column the header can sort by."""
+    rank under every column the header can sort by; "court" is the citing
+    court's authority over this case: controlling or equal courts first,
+    then by level, highest first."""
     rows = sorted(rows, key=lambda r: r["citing_date_filed"], reverse=True)
     rows = sorted(rows, key=lambda r: severity_rank(r["severity"]))
     _stamp_ranks(
@@ -285,13 +289,30 @@ def sort_cited_by(rows: list[JsonDict]) -> list[JsonDict]:
             "recency_index": lambda r: _desc(r["citing_date_filed"]),
             "name_index": lambda r: _name_key(r["citing_case_name"]),
             "mentions_index": lambda r: -(r.get("citing_n_mentions") or 0),
+            "court_index": lambda r: _court_key(
+                r.get("citing_relation"),
+                r.get("citing_court_level"),
+                r["citing_case_name"],
+            ),
         },
     )
     return rows
 
 
+def _court_key(
+    relation: str | None, level: int | None, name: str
+) -> tuple[int, int, tuple[bool, str]]:
+    """Sort key for court authority: the courts whose decisions bind
+    first, then the higher court, then the name."""
+    return (
+        RELATION_RANK.get(relation or "other", 1),
+        99 if level is None else level,
+        _name_key(name),
+    )
+
+
 # ── Status rows ─────────────────────────────────────────────────────────
-# The status rows and the home page's severity filters read the Cited By
+# The status rows and the home page's severity filters read the Later Courts
 # rows pill by pill, through the same helpers. A pill is a direct-history
 # act on this case when its treatment, applied or "as recognized by", is
 # a direct-history label; every other pill is a citing-reference
@@ -338,17 +359,41 @@ def _later_courts(rows: list[JsonDict]) -> list[Act]:
     return list(worst.values())
 
 
+# How a citing court's standing to this one sorts (courts.court_relation):
+# the courts whose treatment binds, then the rest.
+RELATION_RANK: dict[str, int] = {"controlling": 0, "equal": 0, "other": 1}
+
+
+def _later_lead(later: list[Act]) -> Act | None:
+    """The act the Later courts row leads with: the most negative one
+    from a controlling or equal court if there is one, else the most
+    negative from any court; None when nothing negative."""
+    negative = [(r, p) for r, p in later if p["severity"] in NEGATIVE_TIERS]
+    return min(
+        negative,
+        key=lambda rp: RELATION_RANK.get(
+            rp[0].get("citing_relation") or "other", 1
+        ),
+        default=None,
+    )
+
+
 def cited_by_severities(
     cited_by_sorted: list[JsonDict],
 ) -> dict[str, str | None]:
-    """The worst direct-history and citing-reference tiers among a page's
-    Cited By rows, for the home page's severity filters; the same acts
-    the status rows show (home_status)."""
+    """The worst direct-history tier and the Later courts lead's tier
+    among a page's Later Courts rows, for the home page's severity filters;
+    the same acts the status rows show (home_status)."""
     appeals = _acts(cited_by_sorted, direct=True)
     later = _later_courts(cited_by_sorted)
+    lead = _later_lead(later)
+    if lead:
+        cr_severity: str | None = lead[1]["severity"]
+    else:
+        cr_severity = later[0][1]["severity"] if later else None
     return {
         "dh_severity": appeals[0][1]["severity"] if appeals else None,
-        "cr_severity": later[0][1]["severity"] if later else None,
+        "cr_severity": cr_severity,
     }
 
 
@@ -365,13 +410,18 @@ def _passage(row: JsonDict) -> JsonDict:
 
 def home_status(opinion_data: JsonDict) -> JsonDict:
     """The "On appeal" and "Later courts" rows: what happened to the case
-    on appeal, and the worst later treatment with counts. `scope` says
-    what the counts cover: every controlling citing opinion (the anchors)
-    or only the opinions in the collection."""
+    on appeal, and the negative later treatment the row leads with
+    (_later_lead: a controlling or equal court's before any other's)
+    with counts. The later act names its court (what the
+    reader wants to know) as well as its case.
+    `scope` says what the counts cover: every citing opinion from a
+    controlling or equal court (the anchors) or only the opinions in the
+    preview."""
     rows = opinion_data["cited_by"]
     appeals = _acts(rows, direct=True)
     later = _later_courts(rows)
     negative = [(r, p) for r, p in later if p["severity"] in NEGATIVE_TIERS]
+    lead = _later_lead(later)
     scope = opinion_data.get("cited_by_scope", "controlling")
     populated = opinion_data.get("cited_by_populated")
     # every opinion on the site had its citations extracted, so the
@@ -394,13 +444,14 @@ def home_status(opinion_data: JsonDict) -> JsonDict:
     else:
         on_appeal = {"state": "none" if populated else "unknown"}
     later_courts: JsonDict
-    if negative:
-        w, pill = negative[0]
+    if lead:
+        w, pill = lead
         later_courts = {
             "state": "negative",
             "treatment": pill["treatment"],
             "severity": pill["severity"],
             "citing_name": w["citing_case_name"],
+            "citing_court": w["citing_court_display"],
             "citing_cluster_id": w["citing_cluster_id"],
             "n_other_negative": len(negative) - 1,
             "n_plain": len(later) - len(negative),
@@ -445,9 +496,9 @@ class SiteBuilder:
         self.cited_by_by_cluster = self._collect_cited_by()
         self.history = AppellateHistory(ds, self.cited_by_by_cluster)
 
-    # ── edges → Cited By rows ────────────────────────────────────────
+    # ── edges → Later Courts rows ────────────────────────────────────────
     def _collect_cited_by(self) -> dict[int, list[JsonDict]]:
-        """Cited By rows per scoped cluster, from every edge. An edge the
+        """Later Courts rows per scoped cluster, from every edge. An edge the
         dates rule out is a mis-linked citation and is dropped; a
         court-hierarchy oddity is kept, with a note, since the citing
         opinion's Authorities tab shows the treatment either way."""
@@ -496,20 +547,20 @@ class SiteBuilder:
         quote = edge.get("quote") or ""
         if quote and isinstance(citing_doc, list):
             quote = expand_quote(citing_doc, quote)
-        quote_status = quote_names = ""
+        quote_status = quote_names = quote_html = ""
         if quote:
             quote_status = verify_quote(
                 self._streams_for(edge["citing_cluster_id"]), quote
             )["status"]
-            quote_names = quote_names_case(
-                quote,
-                list(cited.get("citations") or []),
-                cited.get("case_name") or "",
-            )
+            cites = list(cited.get("citations") or [])
+            name = cited.get("case_name") or ""
+            quote_names = quote_names_case(quote, cites, name)
+            quote_html = mark_case_in_quote(quote, cites, name)
         rationale = edge.get("rationale") or ""
         return {
             "evidence": {
                 "quote": quote,
+                "quote_html": quote_html,
                 "rationale": rationale,
                 "quote_status": quote_status,
                 "quote_names": quote_names,
@@ -527,6 +578,10 @@ class SiteBuilder:
             ),
             "citing_citations": citing["citations"],
             "citing_court_display": citing["court_display"],
+            "citing_relation": court_relation(
+                self.ds, cited["court"], citing["court"]
+            ),
+            "citing_court_level": citing["court_level"],
             "citing_date_filed": citing["date_filed"],
             "citing_date_short": short_date(citing["date_filed"]),
             "search_text": search_text(
@@ -551,10 +606,12 @@ class SiteBuilder:
     def _authority_row(self, group: JsonDict, document: Any) -> JsonDict:
         """One Authorities-tab row from a citation group: the pipeline's
         row plus what the template needs to render and sort it. Quotes are
-        widened to the sentence(s) containing them."""
+        widened to the sentence(s) containing them. The cited court is
+        the group's, else the collection's record of the case."""
         treatment = group.get("treatment") or "Cited by"
         # the docket number is known only for cases in the collection
         cited = self.index.get(group.get("cited_cluster_id") or -1) or {}
+        court = group.get("court") or cited.get("court") or ""
         recognized = [
             {
                 **r,
@@ -567,6 +624,7 @@ class SiteBuilder:
         recognized_tiers = [x.get("severity") or "Neutral" for x in recognized]
         row = {
             **group,
+            "court": court,
             "treatment": treatment,
             "is_scoped": group.get("cited_cluster_id") in self.scoped_ids,
             "page_url": self._authority_page_url(group),
@@ -596,7 +654,7 @@ class SiteBuilder:
         """Evidence cards for an expanded Authorities row: this opinion's
         own treatment first, then each treatment it recognizes, by
         severity within each; every quote checked against the text. The
-        same rule as the Cited By tab picks which cards are shown
+        same rule as the Later Courts tab picks which cards are shown
         (select_evidence_cards)."""
         direct = row["treatment"] in DIRECT_HISTORY_TREATMENTS
         applied_shown = has_evidence(row["treatment"])
@@ -633,14 +691,19 @@ class SiteBuilder:
         cites = list(row.get("cited_as") or []) + list(
             row.get("citations") or []
         )
+        name = row.get("name") or ""
         for card in cards:
             card["quote_status"] = card["quote_names"] = ""
+            card["quote_html"] = ""
             if card["quote"]:
                 card["quote_status"] = verify_quote(streams, card["quote"])[
                     "status"
                 ]
                 card["quote_names"] = quote_names_case(
-                    card["quote"], cites, row.get("name") or ""
+                    card["quote"], cites, name
+                )
+                card["quote_html"] = mark_case_in_quote(
+                    card["quote"], cites, name
                 )
         return cards
 
@@ -685,6 +748,13 @@ class SiteBuilder:
             if g.get("cited_cluster_id") != opinion["cluster_id"]
         ]
         for row in rows:
+            # the cited court's standing over this opinion's court
+            row["court_relation"] = court_relation(
+                self.ds, opinion["court"], row.get("court") or ""
+            )
+            row["court_level"] = self.ds.court_level.get(
+                row.get("court") or ""
+            )
             row["evidence_cards"] = self._authority_cards(row, streams)
             row["has_detail"] = has_detail(row["evidence_cards"])
             self._validate_authority_row(row)
@@ -707,6 +777,9 @@ class SiteBuilder:
                 "date_index": lambda r: _desc(r.get("date_filed_iso") or ""),
                 "name_index": lambda r: _name_key(r["name"]),
                 "mentions_index": lambda r: -(r.get("n_mentions") or 0),
+                "court_index": lambda r: _court_key(
+                    r["court_relation"], r["court_level"], r["name"]
+                ),
             },
         )
         return rows
@@ -803,22 +876,10 @@ def scope_counts(
         "authorities": sum(1 for e in entries if e["tier"] == "authority"),
         "citing": sum(1 for e in entries if e["tier"] == "citing"),
         "courts": n_courts,
-        "authority_rows": sum(len(p["cited_authorities"]) for p in pages),
-        "citing_rows": sum(len(p["cited_by"]) for p in pages),
-        "citing_rows_at_anchor": sum(
-            len(p["cited_by"]) for p in pages if p["tier"] == "anchor"
-        ),
         "anchor_earliest_year": years[0] if years else "",
         "anchor_latest_year": years[-1] if years else "",
     }
-    for key in (
-        "opinions",
-        "authorities",
-        "citing",
-        "authority_rows",
-        "citing_rows",
-        "citing_rows_at_anchor",
-    ):
+    for key in ("opinions", "authorities", "citing"):
         scope[f"{key}_display"] = f"{scope[key]:,}"
     return scope
 

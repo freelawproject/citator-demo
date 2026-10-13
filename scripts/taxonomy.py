@@ -4,7 +4,7 @@ wording each side of a treatment uses.
 A treatment label is written from the cited case's side ("Distinguished
 by"). The Authorities tab, the disposition and the History tab's cards
 speak from the acting opinion's side, so labels are rewritten to the
-active voice there ("Distinguishing"). A treatment the
+active voice there ("Distinguishes"). A treatment the
 citing opinion only reports another court applying is the "as recognized
 by" form ("Overruled as recognized by"); it keeps the severity of the
 underlying treatment.
@@ -23,10 +23,10 @@ SEVERITY_BY_TREATMENT: dict[str, str] = {
     "Vacated and remanded by": "Stop",
     "Overruled by": "Stop",
     "Abrogated by": "Stop",
-    "Questioned by": "Stop",
     # Warning
     "Affirmed in part; Reversed in part by": "Warning",
     "Affirmed in part; Vacated in part by": "Warning",
+    "Questioned by": "Warning",
     "Disapproved by": "Warning",
     "Limited by": "Warning",
     # Caution
@@ -80,30 +80,30 @@ VERTICAL_OR_SELF_TREATMENTS = DIRECT_HISTORY_TREATMENTS | {
 # What the acting opinion does, as the Authorities tab, the disposition
 # and the History tab's cards show it.
 ACTIVE_VOICE: dict[str, str] = {
-    "Reversed by": "Reversing",
-    "Reversed and remanded by": "Reversing and remanding",
-    "Vacated by": "Vacating",
-    "Vacated and remanded by": "Vacating and remanding",
-    "Overruled by": "Overruling",
-    "Abrogated by": "Abrogating",
-    "Questioned by": "Questioning",
+    "Reversed by": "Reverses",
+    "Reversed and remanded by": "Reverses and remands",
+    "Vacated by": "Vacates",
+    "Vacated and remanded by": "Vacates and remands",
+    "Overruled by": "Overrules",
+    "Abrogated by": "Abrogates",
+    "Questioned by": "Questions",
     "Affirmed in part; Reversed in part by": (
-        "Affirming in part; Reversing in part"
+        "Affirms in part; Reverses in part"
     ),
     "Affirmed in part; Vacated in part by": (
-        "Affirming in part; Vacating in part"
+        "Affirms in part; Vacates in part"
     ),
-    "Disapproved by": "Disapproving",
-    "Limited by": "Limiting",
-    "Remanded by": "Remanding",
-    "Cert. granted by": "Granting cert.",
-    "Criticized by": "Criticizing",
-    "Distinguished by": "Distinguishing",
-    "Declined to follow by": "Declining to follow",
-    "Dismissed by": "Dismissing",
-    "Affirmed by": "Affirming",
-    "Cert. denied by": "Denying cert.",
-    "Cited by": "Citing",
+    "Disapproved by": "Disapproves",
+    "Limited by": "Limits",
+    "Remanded by": "Remands",
+    "Cert. granted by": "Grants cert.",
+    "Criticized by": "Criticizes",
+    "Distinguished by": "Distinguishes",
+    "Declined to follow by": "Declines to follow",
+    "Dismissed by": "Dismisses",
+    "Affirmed by": "Affirms",
+    "Cert. denied by": "Denies cert.",
+    "Cited by": "Cites",
 }
 
 RECOGNIZED_SUFFIX = " as recognized by"
@@ -255,19 +255,19 @@ def direction_for(treatment: str) -> str:
 
 
 def to_active_voice(treatment: str) -> str:
-    """What the acting opinion does: "Distinguished by" → "Distinguishing",
-    "Overruled as recognized by" → "Recognizing as overruled"."""
+    """What the acting opinion does: "Distinguished by" → "Distinguishes",
+    "Overruled as recognized by" → "Recognizes as overruled"."""
     if treatment in ACTIVE_VOICE:
         return ACTIVE_VOICE[treatment]
     if is_recognized(treatment):
-        return f"Recognizing as {past_tense(treatment).lower()}"
+        return f"Recognizes as {past_tense(treatment).lower()}"
     return treatment.removesuffix(" by")
 
 
 def recognizes_label(treatment: str) -> str:
     """Pill text for a treatment this opinion reports another court
-    applied: "Recognizing to be overruled"."""
-    return f"Recognizing to be {past_tense(treatment).lower()}"
+    applied: "Recognizes to be overruled"."""
+    return f"Recognizes to be {past_tense(treatment).lower()}"
 
 
 def validate_pills(pills: list[dict[str, Any]], expert: str) -> list[str]:
@@ -364,9 +364,9 @@ def definition_lookup() -> dict[str, str]:
     """Every display form of each label, mapped to its definition from
     the reader's side, for the pills' tooltips. The passive ("Overruled
     by") and past-tense ("Overruled") forms are shown where this case
-    received the treatment; the active form ("Overruling") where it
+    received the treatment; the active form ("Overrules") where it
     applied it; "Overruled as recognized by" where a later case reports
-    the treatment of this case, and "Recognizing to be overruled" where
+    the treatment of this case, and "Recognizes to be overruled" where
     this case reports the treatment of a cited case. Labels in
     NO_TOOLTIP are left out in every form."""
     lookup: dict[str, str] = {}

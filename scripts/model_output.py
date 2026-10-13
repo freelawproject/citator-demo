@@ -12,6 +12,7 @@ the results as data.
 from __future__ import annotations
 
 import difflib
+import html
 import re
 
 from cl_html import TAG_RE, plain_text
@@ -88,8 +89,8 @@ def is_case_group(group: JsonDict) -> bool:
 
 # ── Dispositions ─────────────────────────────────────────────────────────
 # The treatment form of an order the taxonomy has no label for (a motion
-# decided, a petition dismissed): a neutral "Ordered" pill with no
-# definition, opening the sentence that disposed of the case.
+# decided, a petition dismissed): neutral, with no definition; the pages
+# show the sentence that disposed of the case in its place.
 ORDERED_TREATMENT = "Ordered by"
 # Labels that record no disposition at all.
 _NO_LABEL = frozenset({"", "None", "Other"})
@@ -126,14 +127,14 @@ def disposition_treatment(raw: JsonDict | None) -> JsonDict | None:
 def disposition_label(raw: JsonDict | None) -> JsonDict | None:
     """The disposition for the status rows: a named appellate disposition
     renders as a pill in the active voice, what this opinion did
-    ("Affirming", "Reversing and remanding"); any other order as the
-    "Ordered" pill, which opens the sentence that disposed of the case."""
+    ("Affirms", "Reverses and remands"), always in the neutral grey;
+    any other order as the sentence that disposed of the case, in place
+    of a pill."""
     found = disposition_treatment(raw)
     if found is None:
         return None
     return {
         "label": to_active_voice(found["treatment"]),
-        "severity": found["severity"],
         "text": found["text"],
     }
 
@@ -671,16 +672,93 @@ def verify_quote(streams: list[list[str]], quote: str) -> dict:
     return {"status": status, "coverage": whole, "sentences_found": frac}
 
 
+def _cite_keys(cites: list[str]) -> list[str]:
+    """Each citation's reporter cite, reduced to letters and digits."""
+    keys = [_VERIFY_NONWORD.sub("", c.split(",")[0].lower()) for c in cites]
+    return [k for k in keys if len(k) >= 5]
+
+
+def _name_key(name: str) -> str:
+    """The first party's name, reduced to letters and digits."""
+    short = re.split(r"\s+v\.?\s+", name or "", maxsplit=1)[0].strip()
+    key = _VERIFY_NONWORD.sub("", short.lower())
+    return key if len(key) >= 5 else ""
+
+
+def _normalized(quote: str) -> tuple[str, list[int]]:
+    """The quote reduced to letters and digits, with each kept
+    character's index in the original."""
+    chars: list[str] = []
+    index: list[int] = []
+    for i, ch in enumerate(quote):
+        for c in ch.translate(_QUOTE_NORM_MAP).lower():
+            if "a" <= c <= "z" or "0" <= c <= "9":
+                chars.append(c)
+                index.append(i)
+    return "".join(chars), index
+
+
 def quote_names_case(quote: str, cites: list[str], name: str) -> str:
     """'cite' when a reporter cite of the case is in the quote, 'name' when
     only its short name is, else ''."""
-    q = _VERIFY_NONWORD.sub("", quote.translate(_QUOTE_NORM_MAP).lower())
-    for c in cites:
-        key = _VERIFY_NONWORD.sub("", c.split(",")[0].lower())
-        if len(key) >= 5 and key in q:
-            return "cite"
-    short = re.split(r"\s+v\.?\s+", name or "", maxsplit=1)[0].strip()
-    key = _VERIFY_NONWORD.sub("", short.lower())
-    if len(key) >= 5 and key[:12] in q:
+    q, _ = _normalized(quote)
+    if any(key in q for key in _cite_keys(cites)):
+        return "cite"
+    key = _name_key(name)
+    if key and key[:12] in q:
         return "name"
     return ""
+
+
+def _case_spans(
+    quote: str, cites: list[str], name: str
+) -> list[tuple[int, int]]:
+    """Where the quote cites or names the case: (start, end) in the
+    quote, merged. A citation matches whole; the first party's name
+    matches on its first twelve letters and runs as far as it agrees."""
+    q, index = _normalized(quote)
+    spans: list[tuple[int, int]] = []
+    for key in _cite_keys(cites):
+        start = q.find(key)
+        while start >= 0:
+            spans.append((start, start + len(key)))
+            start = q.find(key, start + 1)
+    key = _name_key(name)
+    if key:
+        head = key[:12]
+        start = q.find(head)
+        while start >= 0:
+            end = start + len(head)
+            while (
+                end < len(q)
+                and end - start < len(key)
+                and q[end] == key[end - start]
+            ):
+                end += 1
+            spans.append((start, end))
+            start = q.find(head, start + 1)
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return [(index[s], index[e - 1] + 1) for s, e in merged]
+
+
+def mark_case_in_quote(quote: str, cites: list[str], name: str) -> str:
+    """The quote as html, with every mention of the case, by citation or
+    by name, wrapped in <strong>, so the case stands out of a long
+    passage; the rest escaped."""
+    out: list[str] = []
+    at = 0
+    for start, end in _case_spans(quote, cites, name):
+        out.append(html.escape(quote[at:start]))
+        out.append(
+            '<strong class="evidence-card__case">'
+            + html.escape(quote[start:end])
+            + "</strong>"
+        )
+        at = end
+    out.append(html.escape(quote[at:]))
+    return "".join(out)

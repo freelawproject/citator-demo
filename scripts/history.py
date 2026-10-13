@@ -63,8 +63,8 @@ def _link(treatment: str, severity: str, quote: str, text: str = "") -> Link:
 
 def _labels(links: list[Link], own: bool) -> list[dict[str, str]]:
     """What a card says that decision did: a pill in the active voice
-    ("Reversing"); an order with no label is the "Ordered" pill, which
-    opens the court's own sentence (`text`). `defined_as` is the label
+    ("Reverses"); an order with no label shows the court's own sentence
+    (`text`) in place of a pill. `defined_as` is the label
     whose definition the pill shows, written from the page's side: the
     active form on the page's own card, the past form ("Reversed") on any
     other card, where the page's case is the one acted on."""

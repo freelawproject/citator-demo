@@ -23,6 +23,8 @@ from taxonomy import (
         ("Overruled by", "Stop"),
         ("Overruled as recognized by", "Stop"),
         ("Limited by", "Warning"),
+        ("Questioned by", "Warning"),
+        ("Questioned as recognized by", "Warning"),
         ("Distinguished by", "Caution"),
         ("Cited by", "Neutral"),
         ("Affirmed by", "Neutral"),
@@ -48,20 +50,20 @@ def test_direction_for(treatment: str, direction: str) -> None:
 
 
 def test_active_voice_and_recognized_wording() -> None:
-    assert to_active_voice("Distinguished by") == "Distinguishing"
+    assert to_active_voice("Distinguished by") == "Distinguishes"
     assert (
         to_active_voice("Affirmed in part; Reversed in part by")
-        == "Affirming in part; Reversing in part"
+        == "Affirms in part; Reverses in part"
     )
-    assert to_active_voice("Cert. denied by") == "Denying cert."
+    assert to_active_voice("Cert. denied by") == "Denies cert."
     assert (
         to_active_voice("Overruled as recognized by")
-        == "Recognizing as overruled"
+        == "Recognizes as overruled"
     )
     assert to_active_voice("Unknown by") == "Unknown"
-    assert recognizes_label("Overruled by") == "Recognizing to be overruled"
+    assert recognizes_label("Overruled by") == "Recognizes to be overruled"
     assert recognizes_label("Cert. granted as recognized by") == (
-        "Recognizing to be cert. granted"
+        "Recognizes to be cert. granted"
     )
 
 
@@ -135,7 +137,7 @@ def test_definition_lookup_speaks_from_the_page() -> None:
     assert lookup["Overruled by"] == received
     assert lookup["Overruled"] == received
     # this case applied it: the active form
-    assert lookup["Overruling"] == (
+    assert lookup["Overrules"] == (
         "This case expressly overruled all or part of the cited case."
     )
     # a later case reports the treatment of this case
@@ -144,7 +146,7 @@ def test_definition_lookup_speaks_from_the_page() -> None:
         "part of this case."
     )
     # this case reports the treatment of a cited case
-    assert lookup["Recognizing to be overruled"] == (
+    assert lookup["Recognizes to be overruled"] == (
         "This case noted that another case expressly overruled all or "
         "part of the cited case."
     )
@@ -153,7 +155,7 @@ def test_definition_lookup_speaks_from_the_page() -> None:
         "On direct appeal, another court reversed this case and sent the "
         "case back for further proceedings."
     )
-    assert lookup["Reversing and remanding"] == (
+    assert lookup["Reverses and remands"] == (
         "On direct appeal, this case reversed the decision below and sent "
         "the case back for further proceedings."
     )
@@ -161,11 +163,11 @@ def test_definition_lookup_speaks_from_the_page() -> None:
         "A later case noted that on direct appeal, another court reversed "
         "this case."
     )
-    assert lookup["Recognizing to be reversed"] == (
+    assert lookup["Recognizes to be reversed"] == (
         "This case noted that on direct appeal, another court reversed "
         "the cited case."
     )
-    for plain in ("Cited by", "Citing", "Cited", "Cited as recognized by"):
+    for plain in ("Cited by", "Cites", "Cited", "Cited as recognized by"):
         assert plain not in lookup
     assert "acting case" not in " ".join(lookup.values())
     assert "Ordered" not in lookup

@@ -105,7 +105,9 @@ def test_render_writings_with_groups_links_rows_and_footnotes() -> None:
     assert 'href="#authority-3"' not in plain
     assert '<span class="cited-case">' in plain
     assert html.count("cited-case__severity--stop") == 2
+    assert 'data-tooltip="Stop"' in html
     assert 'data-url="/opinion/9/"' in html
-    assert "Distinguishing" in html
+    # the hover title is the case name alone
+    assert "Distinguishes" not in html
     assert '<aside class="opinion-footnotes"' in html
     assert 'href="#fnref-1-1"' in html

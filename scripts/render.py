@@ -15,7 +15,7 @@ from html import escape
 from typing import Any
 
 from cl_html import document_plain_paragraphs
-from taxonomy import NEGATIVE_TIERS, past_tense, to_active_voice
+from taxonomy import NEGATIVE_TIERS
 
 SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 # <citedCase data-group="N" data-cluster-id="X" data-case="Y" data-manual="1">
@@ -119,23 +119,6 @@ def _cited_case_attrs(attr_text: str) -> dict[str, str]:
     return dict(_ATTR_RE.findall(attr_text))
 
 
-def _group_title(name: str, info: dict[str, Any]) -> str:
-    """Hover text for a citation: the authority's name, what this opinion
-    does to it and what it recognizes. "&#10;" is a newline in a title."""
-    lines = [escape(name)] if name else []
-    lines.append(to_active_voice(info.get("treatment") or "Cited by"))
-    recognized = [
-        past_tense(x["treatment"])
-        for x in info.get("recognized") or []
-        if x.get("treatment")
-    ]
-    if recognized:
-        lines.append(
-            "Recognizing: " + ", ".join(escape(r) for r in recognized)
-        )
-    return "&#10;".join(lines)
-
-
 class CitationLinker:
     """Turns `<citedCase>` tags into the page's citation markup: a chip
     plus a small marker coloured by the severity of the case's treatment.
@@ -194,9 +177,10 @@ class CitationLinker:
         classes = "cited-case"
         if manual:
             classes += " cited-case--added"
+        title = f' title="{escape(name)}"' if name else ""
         return (
-            f'<a class="cited-case-wrap" href="#authority-{n}" '
-            f'title="{_group_title(name, info)}" data-group="{n}" '
+            f'<a class="cited-case-wrap" href="#authority-{n}"{title} '
+            f'data-group="{n}" '
             f'data-name="{escape(name)}" '
             f'data-url="{escape(info.get("page_url") or "")}">'
             f'<span class="{classes}">{label}</span>'
@@ -217,16 +201,43 @@ class CitationLinker:
         return f'<span class="cited-case-wrap">{cite}{_severity_marker(None)}</span>'
 
 
+# The severity icons, as macros/icons.njk draws them for the pills
+# (severity-stop, severity-warning, severity-caution); kept in step by hand.
+_SEVERITY_ICON_PATHS: dict[str, str] = {
+    "Stop": (
+        "M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06"
+        "L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75"
+        " 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 "
+        "8.28 7.22z"
+    ),
+    "Warning": (
+        "M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167"
+        "-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 "
+        "2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 "
+        "0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
+    ),
+    "Caution": (
+        "M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0z"
+        "m-1-9a.75.75 0 00-.75.75v3.5a.75.75 0 001.5 0v-3.5A.75.75 0 0010 5z"
+    ),
+}
+
+
 def _severity_marker(severity: str | None) -> str:
-    """The small coloured marker after a citation: the most serious
-    treatment on the case's Authorities row. Nothing for a case with no
-    negative treatment."""
+    """The small marker after a citation: the icon of the most serious
+    treatment on the case's Authorities row, in that tier's colour, with
+    the tier as its tooltip. Nothing for a case with no negative
+    treatment."""
     if not severity or severity not in NEGATIVE_TIERS:
         return ""
     tier = severity.lower()
     return (
-        f'<span class="cited-case__severity cited-case__severity--{tier}" '
-        f'role="img" aria-label="Treatment severity: {tier}"></span>'
+        f'<span class="cited-case__severity cited-case__severity--{tier} '
+        f'tooltip-target" data-tooltip="{severity}" role="img" '
+        f'aria-label="Treatment severity: {severity}">'
+        f'<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">'
+        f'<path fill-rule="evenodd" d="{_SEVERITY_ICON_PATHS[severity]}" '
+        f'clip-rule="evenodd" /></svg></span>'
     )
 
 

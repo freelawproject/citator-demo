@@ -26,12 +26,16 @@ def row(citing: int, treatment: str, date: str, **extra: object) -> dict:
     return {
         "citing_cluster_id": citing,
         "citing_case_name": f"Case {citing}",
+        "citing_court_display": f"Court {citing}",
+        "citing_relation": "other",
+        "citing_court_level": 99,
         "citing_date_filed": date,
         "treatment": treatment,
         "severity": {
             "Cited by": "Neutral",
             "Cert. denied as recognized by": "Neutral",
             "Distinguished by": "Caution",
+            "Limited by": "Warning",
             "Overruled as recognized by": "Stop",
             "Vacated as recognized by": "Stop",
             "Affirmed by": "Neutral",
@@ -318,10 +322,10 @@ def test_authority_cards_follow_the_shared_rule(
     by_n = {a["n"]: a for a in page["cited_authorities"]}
     assert by_n[1]["evidence_cards"] == []
     assert by_n[1]["has_detail"] is False
-    assert [c["label"] for c in by_n[2]["evidence_cards"]] == ["Denying cert."]
+    assert [c["label"] for c in by_n[2]["evidence_cards"]] == ["Denies cert."]
     assert by_n[2]["has_detail"] is True
     assert [c["label"] for c in by_n[3]["evidence_cards"]] == [
-        "Recognizing to be cert. denied"
+        "Recognizes to be cert. denied"
     ]
     assert by_n[3]["has_detail"] is True
 
@@ -330,14 +334,13 @@ def test_builder_pages(chain_source: DataSource) -> None:
     builder = SiteBuilder(chain_source)
     page = builder.build_opinion(chain_source.opinions[1])
     assert page["cl_url"].endswith("/opinion/2/x/")
-    assert page["disposition"]["label"] == "Affirming"
+    assert page["disposition"]["label"] == "Affirms"
     cited_by = {r["citing_cluster_id"]: r for r in page["cited_by"]}
     assert cited_by[3]["treatment"] == "Reversed by"
     assert cited_by[4]["recognized"][0]["treatment_past"] == "Reversed"
     # the reversal the California opinion reports is an appeal step, not a
     # later-court treatment, so it no longer colours the Later courts tier
     assert page["summary"] == {"dh_severity": "Stop", "cr_severity": "Caution"}
-    assert page["disposition"]["severity"] == "Neutral"
     assert page["status"]["on_appeal"]["citing_name"] == "Jones v. Smith"
     assert page["appellate_history"]["n_opinions"] == 3
     entry = builder.index_entry(page)
@@ -394,6 +397,7 @@ def test_status_rows_and_filters_read_the_same_acts() -> None:
         "Overruled as recognized by",
         1,
     )
+    assert later["citing_court"] == "Court 2"
     assert cited_by_severities(rows) == {
         "dh_severity": "Stop",
         "cr_severity": "Stop",
@@ -422,3 +426,83 @@ def test_order_citations_puts_primary_reporters_first() -> None:
     # the rest keep their order; an empty list is fine
     assert order_citations(["x", "y"]) == ["x", "y"]
     assert order_citations([]) == []
+
+
+def test_later_courts_lead_prefers_controlling_or_equal_courts() -> None:
+    base = {
+        "is_court_of_last_resort": False,
+        "cited_by_populated": True,
+        "cited_by_scope": "controlling",
+    }
+
+    def lead(rows: list[dict]) -> tuple[str, int, str]:
+        status = home_status({**base, "cited_by": sort_cited_by(rows)})
+        later = status["later_courts"]
+        return later["treatment"], later["citing_cluster_id"], later["n_total"]
+
+    worst_other = row(
+        1, "Overruled as recognized by", "2022-01-01", citing_relation="other"
+    )
+    equal = row(2, "Limited by", "2021-01-01", citing_relation="equal")
+    controlling = row(
+        3, "Distinguished by", "2020-01-01", citing_relation="controlling"
+    )
+    plain = row(4, "Cited by", "2019-01-01", citing_relation="controlling")
+    # the most negative from a controlling or equal court leads, whichever
+    # of the two it comes from
+    assert lead(group_cited_by([worst_other, equal, controlling, plain])) == (
+        "Limited by",
+        2,
+        4,
+    )
+    assert lead(group_cited_by([worst_other, controlling, plain])) == (
+        "Distinguished by",
+        3,
+        3,
+    )
+    # otherwise the most negative of all
+    assert lead(group_cited_by([worst_other, plain])) == (
+        "Overruled as recognized by",
+        1,
+        2,
+    )
+    # the home filter reads the same lead
+    assert (
+        cited_by_severities(
+            sort_cited_by(group_cited_by([worst_other, equal, controlling]))
+        )["cr_severity"]
+        == "Warning"
+    )
+
+
+def test_court_sort_ranks_binding_courts_then_level() -> None:
+    rows = sort_cited_by(
+        group_cited_by(
+            [
+                row(1, "Cited by", "2020-01-01", citing_court_level=2),
+                row(
+                    2,
+                    "Cited by",
+                    "2021-01-01",
+                    citing_relation="equal",
+                    citing_court_level=1,
+                ),
+                row(
+                    3,
+                    "Cited by",
+                    "2022-01-01",
+                    citing_relation="controlling",
+                    citing_court_level=0,
+                ),
+                row(
+                    4,
+                    "Cited by",
+                    "2023-01-01",
+                    citing_relation="other",
+                    citing_court_level=0,
+                ),
+            ]
+        )
+    )
+    by_id = {r["citing_cluster_id"]: r["court_index"] for r in rows}
+    assert [by_id[i] for i in (3, 2, 4, 1)] == [0, 1, 2, 3]

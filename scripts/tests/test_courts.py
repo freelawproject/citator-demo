@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from courts import court_list, court_picker_tabs, court_state
+from courts import court_list, court_picker_tabs, court_relation, court_state
 from data_source import DataSource
 
 
@@ -41,3 +41,17 @@ def test_picker_puts_unclassified_courts_in_other(
     tabs = court_picker_tabs(chain_source, ["scotus", "unknown"])
     assert tabs[-1]["key"] == "other"
     assert tabs[-1]["groups"][0]["keys"] == ["unknown"]
+
+
+def test_court_relation(chain_source: DataSource) -> None:
+    ds = chain_source
+    assert court_relation(ds, "ca9", "scotus") == "controlling"
+    assert court_relation(ds, "cand", "ca9") == "controlling"
+    assert court_relation(ds, "cand", "cand") == "equal"
+    assert court_relation(ds, "ca9", "ca9") == "equal"
+    assert court_relation(ds, "scotus", "scotus") == "equal"
+    assert court_relation(ds, "scotus", "ca9") == "other"
+    assert court_relation(ds, "ca9", "cand") == "other"
+    assert court_relation(ds, "cal", "ca9") == "other"
+    assert court_relation(ds, "cal", "scotus") == "controlling"
+    assert court_relation(ds, "cand", "cal") == "other"

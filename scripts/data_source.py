@@ -22,7 +22,7 @@ class DataSource:
     `date_filed`, `document_text` and, when the citator has run on it,
     `citation_groups`, `citation_groups_meta`, `disposition`, `on_appeal`.
     `edges` are the treatment relationships (citing cluster → cited
-    cluster, treatment, quote, rationale); the Authorities and Cited By
+    cluster, treatment, quote, rationale); the Authorities and Later Courts
     tabs are both derived from them. `external_opinions` holds metadata
     for citing opinions that have no page of their own.
     """

@@ -37,6 +37,15 @@ from typing import Any
 from cl_html import citation_map, cluster_to_document_text
 from data_source import DataSource, JsonDict, short_date
 from model_output import clean_authority_name, is_case_group
+from taxonomy import SEVERITY_BY_TREATMENT
+
+
+def _tier(treatment: Any, recorded: Any) -> str:
+    """The severity tier of a treatment: the taxonomy's, so a tier change
+    there reaches every page; the run's own tier only for a label the
+    taxonomy lacks."""
+    return SEVERITY_BY_TREATMENT.get(treatment, recorded or "Neutral")
+
 
 DATA_SOURCE = Path(__file__).parent.parent / "data-source"
 # payload folders in load order, with the tier their opinions belong to
@@ -343,19 +352,28 @@ class Loader:
             # every form this opinion cites the case as, in reading order
             forms = [f for f in (g.get("cited_as") or citations) if f != name]
             t = treatments.get(str(g["n"])) or {}
+            applied = t.get("applied") or "Cited by"
             rows.append(
                 {
                     "n": g["n"],
                     "expert_treatment": (gold.get(str(g["n"])) or {}).get(
                         "final", ""
                     ),
-                    "treatment": t.get("applied") or "Cited by",
-                    "severity": t.get("severity") or "Neutral",
+                    "treatment": applied,
+                    "severity": _tier(applied, t.get("severity")),
                     "direction": t.get("direction") or "Citing Reference",
                     "treatment_other_label": t.get("other_label") or "",
                     "quote": t.get("quote") or "",
                     "rationale": t.get("rationale") or "",
-                    "recognized": t.get("recognized") or [],
+                    "recognized": [
+                        {
+                            **r,
+                            "severity": _tier(
+                                r.get("treatment"), r.get("severity")
+                            ),
+                        }
+                        for r in t.get("recognized") or []
+                    ],
                     "source": "model",
                     "name": name,
                     "cited_cluster_id": cluster,
@@ -364,6 +382,7 @@ class Loader:
                     "date_filed": short_date(meta.get("date_filed")),
                     "date_filed_iso": meta.get("date_filed") or "",
                     "status": meta.get("status", ""),
+                    "court": meta.get("court_id", ""),
                     "court_name": meta.get("court_name", ""),
                     "citations": order_citations(meta.get("citations", [])),
                 }

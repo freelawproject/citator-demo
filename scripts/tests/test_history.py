@@ -3,6 +3,7 @@ from __future__ import annotations
 from build_data import SiteBuilder
 from data_source import DataSource
 from history import AppellateHistory
+from taxonomy import to_active_voice
 
 
 def test_every_opinion_in_a_chain_draws_the_same_graph(
@@ -40,7 +41,7 @@ def test_every_opinion_in_a_chain_draws_the_same_graph(
     # every card says what that decision did, in the active voice; the
     # definition shown is the page's own on its card, the past form elsewhere
     own = self_step["acts"][0]["treatments"][0]
-    assert (own["treatment"], own["defined_as"]) == ("Affirming", "Affirming")
+    assert (own["treatment"], own["defined_as"]) == ("Affirms", "Affirms")
     others = [
         t
         for s in g["chain"]
@@ -49,8 +50,10 @@ def test_every_opinion_in_a_chain_draws_the_same_graph(
         for t in a["treatments"]
     ]
     assert others
-    assert all(t["treatment"].endswith("ing") for t in others)
-    assert all(not t["defined_as"].endswith("ing") for t in others)
+    assert all(
+        t["treatment"] == to_active_voice(t["defined_as"] + " by")
+        for t in others
+    )
 
 
 def test_decision_below_reads_the_disposition_as_the_status_row_does(
@@ -64,7 +67,7 @@ def test_decision_below_reads_the_disposition_as_the_status_row_does(
     source = DataSource(**{**chain_source.__dict__, "opinions": opinions})
     graph = SiteBuilder(source).history.graph(1)
     own = next(s for s in graph["chain"] if s["role"] == "self")
-    # the "Ordered" pill opens the court's own sentence
+    # an order with no label carries the court's own sentence
     assert [
         (t["treatment"], t["text"])
         for a in own["acts"]

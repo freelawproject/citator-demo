@@ -11,6 +11,11 @@ Markup contract (src/opinion.njk):
   - the metadata card is x-ref="caseCard"
   - citations in the text are `a.cited-case-wrap[data-group][data-name][data-url]`
     linking to `#authority-N`
+  - the navigator reads the authority's Authorities row (`#authority-N`):
+    the pill of its most serious `.evidence-card` (by tier class) is
+    cloned into `x-ref="occPills"` with that card's
+    `.evidence-card__rationale` under it; a row with no card lends its
+    `.citator-row__treatment` pill
   - "Read in the opinion" buttons carry data-quote
 Requires composables/highlight.js.
 */
@@ -22,6 +27,13 @@ const QUOTE_FLASH_MS = 3500;
 // Inline elements whose text is not opinion prose: citation severity
 // markers and footnote marks. Skipped when matching a quote against the text.
 const NON_PROSE = '.cited-case__severity, sup.fnref';
+// the severity tiers, most serious first, as the pills' class suffixes
+const TIERS = ['stop', 'warning', 'caution', 'neutral'];
+// what the navigator shows of the Authorities row: the rationale of its
+// most serious evidence card, and whether it has any card to read (a
+// merely cited case has none); that card's pill is cloned into the
+// navigator (occRowLead), since the CSP build has no x-html
+const EMPTY_ROW = { rationale: '', hasAnalysis: false };
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('opinionTabs', () => ({
@@ -33,7 +45,7 @@ document.addEventListener('alpine:init', () => {
     // true once the metadata card has scrolled above the viewport
     caseBarVisible: false,
     // the citation whose mentions are being stepped through
-    occNav: { open: false, n: 0, name: '', url: '', index: 0, total: 0 },
+    occNav: { open: false, n: 0, name: '', url: '', index: 0, total: 0, ...EMPTY_ROW },
 
     // ── tabs ───────────────────────────────────────────────────────────
     get tabSelected() {
@@ -53,8 +65,8 @@ document.addEventListener('alpine:init', () => {
     },
 
     // Switch tab and record it in the URL hash. A change of tab gets its
-    // own history entry, so the browser's Back (and the Back control)
-    // return to the tab the reader was on; a jump within the current tab
+    // own history entry, so the browser's Back returns to the tab the
+    // reader was on; a jump within the current tab
     // only replaces the hash, so Back never stays on the same page for
     // that. `hash` may name a target inside the tab (an Authorities row,
     // a writing section) and defaults to the tab itself.
@@ -205,7 +217,49 @@ document.addEventListener('alpine:init', () => {
     },
     get occNavCount() {
       if (!this.occNav.total) return '';
+      if (this.occNav.total === 1) return 'Only occurrence';
       return `Occurrence ${this.occNav.index + 1} of ${this.occNav.total}`;
+    },
+    // the previous / next buttons only when there is somewhere to go
+    get occNavMany() {
+      return this.occNav.total > 1;
+    },
+    get occNavRationale() {
+      return this.occNav.rationale;
+    },
+    get occNavHasAnalysis() {
+      return this.occNav.hasAnalysis;
+    },
+    get occNavOnlyCited() {
+      return this.occNav.open && !this.occNav.hasAnalysis;
+    },
+
+    // the authority's most serious treatment, applied or recognized, as
+    // its Authorities row shows it: that evidence card's pill (tooltip
+    // included) is cloned into the navigator and its rationale shown; a
+    // merely cited case gets the row's own pill and no rationale
+    occRowLead(n) {
+      const row = document.getElementById(`authority-${n}`);
+      const target = this.$refs.occPills;
+      if (!row) {
+        target.replaceChildren();
+        return { ...EMPTY_ROW };
+      }
+      let lead = null;
+      for (const card of row.querySelectorAll('.evidence-card')) {
+        const pill = card.querySelector('.severity-badge');
+        const tier = TIERS.findIndex((t) => pill && pill.classList.contains(`severity-badge--${t}`));
+        if (!lead || (tier >= 0 && tier < lead.tier)) {
+          const rationale = card.querySelector('.evidence-card__rationale');
+          lead = { tier, pill, rationale: rationale ? rationale.textContent : '' };
+        }
+      }
+      const pill = lead ? lead.pill : row.querySelector('.citator-row__treatment .severity-badge');
+      target.replaceChildren(...(pill ? [pill.cloneNode(true)] : []));
+      return {
+        rationale: lead ? lead.rationale : '',
+        hasAnalysis: lead !== null,
+      };
     },
 
     // every mention of authority n, in document order
@@ -224,6 +278,7 @@ document.addEventListener('alpine:init', () => {
         url: link.dataset.url || '',
         index: Math.max(0, mentions.indexOf(link)),
         total: mentions.length,
+        ...this.occRowLead(n),
       };
       this.occShow();
     },
@@ -246,7 +301,14 @@ document.addEventListener('alpine:init', () => {
       this.handleHash(hash);
     },
     occClose() {
-      this.occNav = { open: false, n: 0, name: '', url: '', index: 0, total: 0 };
+      this.occNav = { open: false, n: 0, name: '', url: '', index: 0, total: 0, ...EMPTY_ROW };
+      this.$refs.occPills.replaceChildren();
+    },
+    // a click outside the navigator closes it, unless it is on another
+    // citation, which reopens it for that case
+    occClickOutside(event) {
+      if (event.target.closest('a.cited-case-wrap')) return;
+      this.occClose();
     },
 
     // ── quote lookup ───────────────────────────────────────────────────

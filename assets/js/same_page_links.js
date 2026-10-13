@@ -21,9 +21,12 @@ document.addEventListener('click', (event) => {
   history.replaceState(null, '', hash ? `${base}#${hash}` : base);
   window.dispatchEvent(new HashChangeEvent('hashchange'));
 
-  // scroll on the next frame so a panel a component has just shown is laid out
+  // scroll on the next frame so a panel a component has just shown is laid
+  // out; a hash naming a tab panel (`panel-<hash>`) scrolls to its tab
   requestAnimationFrame(() => {
-    const target = hash && hash !== 'top' ? document.getElementById(hash) : null;
+    let target = hash && hash !== 'top' ? document.getElementById(hash) : null;
+    const panel = !target && hash ? document.getElementById(`panel-${hash}`) : null;
+    if (panel) target = document.getElementById(panel.getAttribute('aria-labelledby') || '');
     if (!target) {
       window.scrollTo({ top: 0 });
       return;

@@ -8,7 +8,6 @@ permalink: "/opinion/{{ opinion.cluster_id }}/"
 scripts:
   - /assets/js/alpine/components/opinion_tabs.js
   - /assets/js/alpine/components/treatment_list.js
-backNav: inline
 eleventyComputed:
   title: "{{ opinion.case_name }}"
 ---
@@ -22,7 +21,7 @@ eleventyComputed:
 {% set tabs = [
   {"id": "opinion", "label": "Opinion", "count": 0},
   {"id": "authorities", "label": "Authorities", "count": opinion.cited_authorities | length},
-  {"id": "cited-by", "label": "Cited By", "count": opinion.cited_by | length},
+  {"id": "cited-by", "label": "Later Courts", "count": opinion.cited_by | length},
   {"id": "history", "label": "History", "count": historySteps if historySteps > 1 else 0}
 ] %}
 
@@ -51,11 +50,10 @@ eleventyComputed:
   <div class="case-bar-anchor">
     <div class="case-bar" x-bind:class="caseBarClass" x-bind:aria-hidden="caseBarHidden">
       <a href="#top" class="case-bar__name" title="{{ opinion.case_name }}">{{ opinion.case_name }}</a>
-      <span class="case-bar__meta">{{ opinion.court_display }} <span class="case-bar__dot" aria-hidden="true">·</span> {{ opinion.date_filed }}</span>
+      <span class="case-bar__meta">{{ opinion.court_display }} <span class="case-bar__dot" aria-hidden="true">·</span> {{ opinion.date_filed | usdate }}</span>
     </div>
   </div>
 
-  {% include "partials/back-nav.njk" %}
   <div class="opinion-card" x-ref="caseCard">
     <header class="max-w-3xl">
       <h1 class="font-cooper text-display-sm md:text-display-md font-semibold text-greyscale-900 leading-tight">
@@ -63,15 +61,15 @@ eleventyComputed:
       </h1>
       <dl class="meta-list mt-3">
         <div><dt>Court</dt><dd>{{ opinion.court_display }}</dd></div>
-        <div><dt>File Date</dt><dd>{{ opinion.date_filed }}</dd></div>
-        {% if opinion.docket_numbers | length %}<div><dt>Docket Number</dt><dd>{{ citeList(opinion.docket_numbers, noun="docket number") }}</dd></div>{% endif %}
+        <div><dt>Date filed</dt><dd>{{ opinion.date_filed | usdate }}</dd></div>
+        {% if opinion.docket_numbers | length %}<div><dt>Case Number</dt><dd data-cite-cell>{{ citeList(opinion.docket_numbers, noun="case number") }}</dd></div>{% endif %}
         {% if opinion.citations | length %}
-        <div class="basis-full"><dt>Citations</dt><dd>{{ citeList(opinion.citations, dot=true) }}</dd></div>
+        <div class="basis-full"><dt>Citations</dt><dd data-cite-cell>{{ citeList(opinion.citations, dot=true) }}</dd></div>
         {% endif %}
       </dl>
     </header>
     <section id="treatment-summary" aria-label="Status of this opinion">
-      {{ statusRows(opinion.status, opinion.disposition, treatment_definitions, "opinion-status") }}
+      {{ statusRows(opinion.status, opinion.disposition, treatment_definitions, "opinion-status", false, "#cited-by") }}
     </section>
   </div>
 
@@ -109,29 +107,36 @@ eleventyComputed:
 
   {# occurrence navigator: opens on a citation click, steps through every
      mention of that authority; the name opens the authority's page when
-     the site has one #}
-  <div class="occ-nav" x-show="occNavOpen" x-cloak role="dialog" aria-label="Citation occurrences">
+     the site has one. Escape or a click elsewhere closes it. #}
+  <div class="occ-nav" x-show="occNavOpen" x-cloak role="dialog" aria-label="Citation occurrences" x-on:keydown.escape.window="occClose" x-on:click.outside="occClickOutside">
+    {# the most serious treatment's pill on a line of its own, the case
+       name line under it #}
+    <div class="occ-nav__pills" x-ref="occPills"></div>
+    <div class="occ-nav__main">
     <div class="occ-nav__text">
       <a class="occ-nav__name" x-show="occNavHasUrl" x-bind:href="occNavUrl" x-text="occNavName" href="/"></a>
       <span class="occ-nav__name" x-show="occNavNoUrl" x-text="occNavName"></span>
-      <span class="occ-nav__count" x-text="occNavCount"></span>
     </div>
     <div class="occ-nav__buttons">
-      <button type="button" x-on:click="occPrev" class="occ-nav__btn" aria-label="Previous occurrence">
+      <span class="occ-nav__count" x-text="occNavCount"></span>
+      <button type="button" x-on:click="occPrev" x-show="occNavMany" class="occ-nav__btn" aria-label="Previous occurrence">
         {{ icon("chevron-up", "w-4 h-4") }}
         Previous
       </button>
-      <button type="button" x-on:click="occNext" class="occ-nav__btn" aria-label="Next occurrence">
+      <button type="button" x-on:click="occNext" x-show="occNavMany" class="occ-nav__btn" aria-label="Next occurrence">
         Next
         {{ icon("chevron-down", "w-4 h-4") }}
       </button>
-      <button type="button" x-on:click="occToRow" class="occ-nav__btn occ-nav__btn--row">
-        Authority entry
-        {{ icon("arrow-right", "w-3.5 h-3.5") }}
-      </button>
-      <button type="button" x-on:click="occClose" class="occ-nav__close" aria-label="Close">
-        {{ icon("close", "w-4 h-4") }}
-      </button>
+    </div>
+    </div>
+    {# that treatment's rationale with a way to the full analysis; a
+       merely cited case says so and links nowhere #}
+    <div class="occ-nav__details">
+      <div class="occ-nav__analysis" x-show="occNavHasAnalysis">
+        <p class="occ-nav__rationale" x-text="occNavRationale"></p>
+        <button type="button" class="occ-nav__more" x-on:click="occToRow">Read the complete citator analysis {{ icon("arrow-right", "w-3.5 h-3.5") }}</button>
+      </div>
+      <p class="occ-nav__rationale" x-show="occNavOnlyCited">This opinion only cites the case; it applies no treatment to it and recognizes none.</p>
     </div>
   </div>
 

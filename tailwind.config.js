@@ -28,6 +28,12 @@ module.exports = {
     "sev-toggle--warning",
     "sev-toggle--caution",
     "sev-toggle--neutral",
+    // the case mark inside an evidence quote (model_output.mark_case_in_quote)
+    "evidence-card__case",
+    // the severity marker after a citation (render._severity_marker)
+    "cited-case__severity--stop",
+    "cited-case__severity--warning",
+    "cited-case__severity--caution",
   ],
   theme: {
     extend: {

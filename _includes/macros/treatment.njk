@@ -2,7 +2,11 @@
    - severityBadge(severity, label, small=false, definition=""): the pill
      every treatment renders as; `small` is the filter menus' size. With
      a `definition` (treatment_definitions[label], global data that a
-     macro cannot read itself) the pill shows it on hover and focus.
+     macro cannot read itself) the pill carries a tooltip element, shown
+     on hover and focus: the label in bold above a rule, the definition
+     under it. The tip is hidden with opacity, so assistive technology
+     reads the pill's label and then the definition; the tip's own copy of
+     the label is hidden from it so nothing is read twice.
    - validationDot(state, expert_treatment): the expert-validation mark
      beside a pill; only rendered when the `validation` build flag is on. #}
 {% from "macros/icons.njk" import icon %}
@@ -17,7 +21,7 @@
   {%- else -%}
     {%- set variant = "severity-badge--neutral" -%}{%- set glyph = "severity-neutral" -%}
   {%- endif -%}
-  <span class="severity-badge {{ variant }}{% if small %} severity-badge--small{% endif %}{% if definition %} tooltip-target severity-badge--defined" data-tooltip="{{ definition }}" tabindex="0{% endif %}">{{ icon(glyph, "severity-badge__icon") }}<span class="severity-badge__label">{{ label }}</span></span>
+  <span class="severity-badge {{ variant }}{% if small %} severity-badge--small{% endif %}{% if definition %} severity-badge--defined" tabindex="0{% endif %}">{{ icon(glyph, "severity-badge__icon") }}<span class="severity-badge__label">{{ label }}</span>{% if definition %}<span class="pill-tip"><span class="pill-tip__label" aria-hidden="true">{{ label }}</span>{{ definition }}</span>{% endif %}</span>
 {% endmacro %}
 
 {% macro validationDot(state, expert_treatment="") %}

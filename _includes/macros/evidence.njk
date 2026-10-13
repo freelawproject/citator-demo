@@ -1,6 +1,7 @@
 {# One evidence card inside an expanded treatment row: the pill, the
    rationale, the quote with its status line, and a way to the passage.
-   `card` has label, severity, rationale, quote, quote_status, quote_names
+   `card` has label, severity, rationale, quote, quote_html (the quote
+   escaped, the case's name or citation in bold), quote_status, quote_names
    and optionally other_label. `defs` is the page's treatment_definitions
    data, for the pill's tooltip. `where` names the text the quote comes from
    ("the opinion" or "the citing opinion"). With `href` the passage link is
@@ -19,7 +20,7 @@
   {% if card.rationale %}<p class="evidence-card__rationale">{{ card.rationale }}</p>{% endif %}
   {% if card.quote %}
   <blockquote class="evidence-card__quote">
-    <p class="evidence-card__quote-text">{{ card.quote }}</p>
+    <p class="evidence-card__quote-text">{{ card.quote_html | safe }}</p>
     {# two checks: is the quote in the text, and does it name this case #}
     <p class="quote-status">
       {% if card.quote_status == "found" %}<span class="quote-status__ok">✓ In {{ where }}</span>

@@ -1,12 +1,12 @@
-{# Toolbar and column headers for the Authorities and Cited By lists.
-   `listToolbar(sort_options, noun, rec_label, validation)` renders the
+{# Toolbar and column headers for the Authorities and Later Courts lists.
+   `listToolbar(sort_options, noun, applied_label, rec_label, validation)` renders the
    sort dropdown (treatment_list.js reorders the rows with CSS `order`
    from the ranks each row carries; each option is {key, label}), the
    filter menu (two sections: the treatment this opinion applied and the
    treatments it recognizes other courts applied, each by severity;
    `applied_label` and `rec_label` head the two sections) and the "N of
    M" count.
-   `listHeader(cols, validation)` renders the column labels. Rows and
+   `listHeader(cols)` renders the column labels. Rows and
    header share the `.citator-row` grid. Lives inside a treatment_list.js
    scope. #}
 {% from "macros/icons.njk" import icon %}
@@ -75,8 +75,8 @@
 </div>
 {% endmacro %}
 
-{% macro listHeader(cols, validation=false) %}
-<div class="citator-row citator-row--head{% if validation %} citator-row--validation{% endif %}">
+{% macro listHeader(cols) %}
+<div class="citator-row citator-row--head">
   {% for c in cols %}
   <span class="col-head {{ c.class }}">
     <span title="{{ c.title }}">{{ c.label }}</span>

@@ -1,5 +1,5 @@
 /*
-The Authorities and Cited By lists: the search box, sort dropdown and
+The Authorities and Later Courts lists: the search box, sort dropdown and
 filter menu above the list. One factory registers both components; they differ only in the
 columns they can sort by.
 
@@ -11,9 +11,9 @@ Markup contract (partials/treatment-list.njk):
   - filter checkboxes carry data-filter (a property name below)
   - the sort <select>'s option values are column keys
 Each row carries its rank under every sort key (the rank already encodes
-the direction: most severe, first appearance, A, newest or most cited
-first), so reordering is a CSS `order` away and filtering is a class,
-never a rebuild of the list.
+the direction: most severe, first appearance, A, newest, most cited or
+most authoritative court first), so reordering is a CSS `order` away and
+filtering is a class, never a rebuild of the list.
 */
 const SEVERITY_FILTERS = ['filterStop', 'filterWarning', 'filterCaution', 'filterNeutral'];
 const RECOGNIZED_FILTERS = ['filterRecStop', 'filterRecWarning', 'filterRecCaution', 'filterRecNeutral'];
@@ -32,12 +32,14 @@ const AUTHORITIES_SORT_KEYS = {
   mentions: 'mentionsIndex',
   name: 'nameIndex',
   appearance: 'appearanceIndex',
+  court: 'courtIndex',
 };
 const CITED_BY_SORT_KEYS = {
   severity: 'severityIndex',
   recency: 'recencyIndex',
   mentions: 'mentionsIndex',
   name: 'nameIndex',
+  court: 'courtIndex',
 };
 
 function treatmentList(sortKeys) {

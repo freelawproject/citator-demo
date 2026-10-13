@@ -12,18 +12,18 @@
 <section class="cited-authorities" aria-label="Cited authorities" x-data="authoritiesFilter">
   {% if opinion.cited_authorities | length %}
   {{ listToolbar([
-    {"key": "severity", "label": "Severity, most severe first"},
-    {"key": "appearance", "label": "Order of appearance, first to last"},
-    {"key": "name", "label": "Alphabetical, A to Z"},
-    {"key": "date", "label": "Date filed, newest first"},
-    {"key": "mentions", "label": "Times cited, most first"}
+    {"key": "severity", "label": "Severity"},
+    {"key": "appearance", "label": "Order of Appearance"},
+    {"key": "name", "label": "Case Name"},
+    {"key": "date", "label": "Newest First"},
+    {"key": "mentions", "label": "Depth of Treatment"},
+    {"key": "court", "label": "Court Authority"}
   ], "authorities", "Applied treatment", "Recognized treatment", flags.validation) }}
   {{ listHeader([
-    {"label": "Treatment", "title": "What this opinion does to the case, then what it recognizes other courts did"},
-    {"label": "Authority", "title": "The cited case, by name"},
-    {"label": "Date", "class": "col-head--pad", "title": "When the cited case was decided"},
-    {"label": "Cited", "class": "col-head--pad", "title": "How often this opinion cites the case"}
-  ], flags.validation) }}
+    {"label": "Authority", "title": "The cited case, under what this opinion does to it and what it recognizes other courts did"},
+    {"label": "Date filed", "class": "col-head--pad", "title": "When the cited case was decided"},
+    {"label": "Depth", "class": "col-head--pad", "title": "How many times this opinion cites the case"}
+  ]) }}
   <ol role="list" class="citator-list">
     {% for a in opinion.cited_authorities %}
     <li
@@ -39,12 +39,13 @@
       data-date-index="{{ a.date_index }}"
       data-name-index="{{ a.name_index }}"
       data-mentions-index="{{ a.mentions_index }}"
+      data-court-index="{{ a.court_index }}"
       x-bind:class="rowClass"
       x-bind:style="rowStyle"
       class="cited-authority sev-rail sev-rail--{{ a.overall_severity | lower }}"
     >
       {% if a.has_detail %}<details class="authority-row"><summary class="authority-row__summary">{% endif %}
-      <div class="citator-row{% if flags.validation %} citator-row--validation{% endif %}">
+      <div class="citator-row">
         {# what this opinion does, then what it recognizes other courts did #}
         <div class="citator-row__treatment">
           <span>
@@ -65,26 +66,17 @@
             {% else %}<span class="citator-row__title">{{ a.name }}</span>{% endif %}
 
           </div>
+          {# court, status and case number on one line: an authority's
+             citations and the forms it is cited as stay searchable but
+             are not shown #}
+          {% set parts = [] %}
+          {% if a.court_name %}{% set parts = (parts.push(a.court_name), parts) %}{% endif %}
+          {% if a.status %}{% set parts = (parts.push(a.status), parts) %}{% endif %}
+          {% if parts | length or a.docket_numbers | length %}
           <p class="citator-row__meta">
-            {%- if a.court_name %}{{ a.court_name }}{% endif -%}
-            {%- if a.court_name and a.status %} <span class="cite-list__dot" aria-hidden="true">·</span> {% endif -%}
-            {%- if a.status %}{{ a.status }}{% endif -%}
+            {%- for part in parts %}{{ part }}{% if not loop.last or a.docket_numbers | length %} <span class="cite-list__dot" aria-hidden="true">·</span> {% endif %}{% endfor -%}
+            {%- if a.docket_numbers | length %}<span class="citator-row__meta-item" data-cite-cell>No. {{ citeList(a.docket_numbers, noun="case number") }}</span>{% endif -%}
           </p>
-          {% if a.docket_numbers | length or a.citations | length or a.cited_as | length %}
-          <dl class="cited-authority__meta">
-            {% if a.docket_numbers | length %}
-            <dt>Docket Number</dt>
-            <dd>{{ citeList(a.docket_numbers, noun="docket number") }}</dd>
-            {% endif %}
-            {% if a.citations | length %}
-            <dt>Citations</dt>
-            <dd>{{ citeList(a.citations) }}</dd>
-            {% endif %}
-            {% if a.cited_as | length %}
-            <dt>Cited as</dt>
-            <dd>{{ citeList(a.cited_as, dot=true, noun="citation form") }}</dd>
-            {% endif %}
-          </dl>
           {% endif %}
         </div>
         <div class="citator-row__date">{{ a.date_filed }}</div>

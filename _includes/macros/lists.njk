@@ -1,7 +1,8 @@
-{# A clamped list of citations: up to `limit` entries show, as many of
-   them as fit on one line of the enclosing <dd> (assets/js/cite_fit.js
-   measures and hides the rest); every other entry sits behind a "+N"
-   button (composables/list_toggle.js) that expands the <dd> in place.
+{# A clamped list of citations: up to `limit` entries show, in a block
+   cell (<dd data-cite-cell>) as many of them as fit on one line
+   (assets/js/cite_fit.js measures and hides the rest); every other entry
+   sits behind a "+N" button (composables/list_toggle.js) that expands the
+   enclosing cell, the nearest `data-cite-cell`, in place.
    Without script the first `limit` entries show. `dot` separates entries
    with a middle dot instead of a comma. `noun` names the entries for the
    button's label. #}

@@ -7,10 +7,9 @@
     --content-max-width: 1200px;
     /* the compact case bar on opinion pages; in-page jump targets clear it */
     --case-bar-h: 2.5rem;
-    /* column tracks of the Authorities / Cited By row grid. The treatment
-       column holds the applied pill and the recognized pills, which
-       spell the whole recognized form. */
-    --row-treatment: 11.25rem;
+    /* column tracks of the Authorities / Cited By row grid: the case,
+       its date and its depth; the treatment pills take a line of their
+       own above them, across the row */
     --row-date: 6.5rem;
     --row-cited: 4.5rem;
     --row-chevron: 1rem;
@@ -117,12 +116,6 @@
   .eyebrow {
     @apply text-xs font-semibold uppercase tracking-wide text-greyscale-500;
   }
-  .back-nav-row {
-    @apply mb-6;
-  }
-  .back-nav {
-    @apply inline-flex items-center gap-1 rounded-md border border-greyscale-300 bg-white px-2.5 py-1 text-sm font-medium text-greyscale-700 no-underline transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
-  }
   /* a chevron that turns when its <details> opens */
   .expand-chevron {
     @apply transition-transform;
@@ -131,14 +124,12 @@
     transform: rotate(90deg);
   }
   /* <summary> without the default marker */
-  .disposition__summary,
   .history-node__meta-summary,
   .treatment-expand__summary,
   .authority-row__summary,
   .list-filter__summary {
     list-style: none;
   }
-  .disposition__summary::-webkit-details-marker,
   .history-node__meta-summary::-webkit-details-marker,
   .treatment-expand__summary::-webkit-details-marker,
   .authority-row__summary::-webkit-details-marker,
@@ -184,7 +175,7 @@
     @apply overflow-visible whitespace-normal;
   }
   /* entries beyond the clamp, and candidates cite_fit.js found not to fit
-     on the line; both show once the cell is expanded */
+     on the line; both show once the cell (data-cite-cell) is expanded */
   .cite-extra,
   .cite-fit-hidden {
     display: none;
@@ -234,14 +225,28 @@
   /* a pill with a definition: the tooltip opens from its left edge, since
      pills sit at the left of their rows */
   .severity-badge--defined {
-    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+    @apply relative focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
   }
-  .severity-badge--defined::after {
+  /* the pill's tooltip element (macros/treatment.njk): the label in bold
+     over a rule, the definition under it; it opens from the pill's left
+     edge, since pills sit at the left of their rows */
+  .pill-tip {
     left: 0;
     right: auto;
     text-transform: none;
     letter-spacing: normal;
     font-weight: 400;
+  }
+  .pill-tip__label {
+    display: block;
+    margin-bottom: 5px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+    font-weight: 600;
+  }
+  .severity-badge--defined:hover .pill-tip,
+  .severity-badge--defined:focus-visible .pill-tip {
+    opacity: 1;
   }
   .severity-badge--small .severity-badge__icon {
     @apply h-2.5 w-2.5;
@@ -252,12 +257,16 @@
   .validation-dot__icon {
     @apply h-4 w-4 flex-shrink-0;
   }
-  /* a tooltip from the data-tooltip attribute, on hover and on focus */
+  /* a tooltip, on hover and on focus: from the data-tooltip attribute
+     (.tooltip-target) or as a .pill-tip element; one box for both */
   .tooltip-target {
     @apply relative inline-flex items-center justify-center;
   }
   .tooltip-target::after {
     content: attr(data-tooltip);
+  }
+  .tooltip-target::after,
+  .pill-tip {
     position: absolute;
     top: calc(100% + 6px);
     right: 0;
@@ -401,19 +410,13 @@
   .home-status__text {
     @apply text-xs text-greyscale-700;
   }
-  /* an order with no label: the pill opens the sentence that disposed of
-     the case; shared by the status rows and the History cards */
-  .disposition {
-    @apply relative z-10 min-w-0;
-  }
-  .disposition__summary {
-    @apply inline-flex cursor-pointer items-center gap-1.5 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
-  }
-  .disposition__text {
-    @apply m-0 mt-1.5 text-xs text-greyscale-500;
-  }
   .home-status__sep {
     @apply text-greyscale-400;
+  }
+  /* a count that opens the Later Courts tab: plain text until hovered,
+     and above the card link's covering layer */
+  .home-status__link {
+    @apply relative z-10 text-inherit no-underline hover:text-primary-700 hover:underline;
   }
   .home-status__action {
     @apply relative z-10 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
@@ -635,32 +638,58 @@
   /* occurrence navigator, fixed at the bottom while stepping through a
      citation's mentions */
   .occ-nav {
-    @apply fixed bottom-5 left-1/2 z-30 flex -translate-x-1/2 flex-wrap items-center gap-x-4 gap-y-2 rounded-full border border-greyscale-300 bg-white py-2 pl-4 pr-2 text-sm shadow-lg;
+    @apply fixed bottom-5 left-1/2 z-30 flex w-[44rem] -translate-x-1/2 flex-col gap-y-1.5 rounded-2xl border border-greyscale-300 bg-white py-2 pl-4 pr-3 text-sm shadow-lg;
     max-width: calc(100vw - 2rem);
   }
+  /* the name line runs the card's full width: the name and count at the
+     left, the previous / next buttons pushed to the right */
+  .occ-nav__main {
+    @apply flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2;
+  }
+  /* the lead rationale with the way to the full analysis reading on
+     from it, under the name line */
+  .occ-nav__details {
+    @apply flex flex-col gap-y-1.5 border-t border-greyscale-200 pr-2 pt-2;
+  }
+  /* the authority's pills as on its row, on a line above its name */
+  .occ-nav__pills {
+    @apply flex flex-wrap items-center gap-x-1.5 gap-y-1 pr-2;
+  }
+  .occ-nav__pills:empty {
+    @apply hidden;
+  }
+  .occ-nav__pills > span {
+    @apply inline-flex max-w-full items-center gap-x-1.5;
+  }
+  .occ-nav__analysis {
+    @apply flex flex-col gap-y-1;
+  }
+  .occ-nav__rationale {
+    @apply m-0 text-xs leading-snug text-greyscale-700;
+  }
+  /* the way to the full analysis, at the end of the rationale's reading
+     line: right-aligned under it */
+  .occ-nav__more {
+    @apply inline-flex items-center gap-0.5 self-end whitespace-nowrap text-xs font-medium text-primary-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
+  }
   .occ-nav__text {
-    @apply flex min-w-0 items-center gap-x-2;
+    @apply flex min-w-0 flex-1 items-center gap-x-2;
   }
   .occ-nav__name {
-    @apply max-w-[16rem] truncate font-semibold text-greyscale-900 no-underline;
+    @apply font-semibold text-greyscale-900 no-underline;
   }
   a.occ-nav__name {
     @apply hover:text-primary-700 hover:underline;
   }
   .occ-nav__count {
-    @apply whitespace-nowrap text-xs text-greyscale-600;
+    @apply mr-1 whitespace-nowrap text-xs text-greyscale-600;
   }
+  /* the count then the previous / next buttons, at the right edge */
   .occ-nav__buttons {
-    @apply flex items-center gap-1;
+    @apply flex flex-shrink-0 items-center gap-1;
   }
   .occ-nav__btn {
     @apply inline-flex items-center gap-1 rounded-full border border-greyscale-300 bg-white px-3 py-1 text-xs font-medium text-greyscale-700 hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
-  }
-  .occ-nav__btn--row {
-    @apply border-primary-600 bg-primary-600 text-white hover:border-primary-700 hover:bg-primary-700 hover:text-white;
-  }
-  .occ-nav__close {
-    @apply ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-greyscale-500 hover:bg-greyscale-100 hover:text-greyscale-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
   }
 
   /* ── Opinion text ────────────────────────────────────────────────── */
@@ -740,17 +769,31 @@
   .opinion-body .cited-case-wrap {
     @apply inline whitespace-nowrap;
   }
+  /* the severity icon after a citation, in the tier's pill colour, its
+     tier as a tooltip (render._severity_marker) */
   .opinion-body .cited-case__severity {
-    @apply ml-0.5 inline-block h-2 w-2 rounded-full align-middle;
+    @apply ml-0.5 inline-flex h-3.5 w-3.5 align-text-bottom;
   }
+  .opinion-body .cited-case__severity > svg {
+    @apply h-3.5 w-3.5;
+  }
+  /* three steps apart in hue and lightness, so the small icons tell
+     apart at a glance: crimson, bright orange, dark gold (each at
+     least 3:1 on white) */
   .opinion-body .cited-case__severity--stop {
-    @apply bg-red-500;
+    @apply text-red-700;
   }
   .opinion-body .cited-case__severity--warning {
-    @apply bg-orange-500;
+    @apply text-orange-600;
   }
   .opinion-body .cited-case__severity--caution {
-    @apply bg-amber-500;
+    @apply text-amber-700;
+  }
+  .opinion-body .cited-case__severity::after {
+    text-transform: none;
+    letter-spacing: normal;
+    font-style: normal;
+    font-weight: 500;
   }
   /* every citation is a link (to its Authorities row, or to the case's
      page), so the whole chip gets the hover: a neutral darkening, since a
@@ -815,14 +858,9 @@
   /* rows and the header share one grid, so the columns line up down the
      list and across the two tabs whether or not a row fills a column */
   .citator-row {
-    @apply grid items-start gap-x-3 px-5 py-3;
+    @apply grid items-start gap-x-3 gap-y-1.5 px-5 py-3.5;
     grid-template-columns:
-      var(--row-treatment) minmax(0, 1fr)
-      var(--row-date) var(--row-cited) var(--row-chevron);
-  }
-  /* the validation marks sit beside each pill and need the room */
-  .citator-row--validation {
-    --row-treatment: 12.375rem;
+      minmax(0, 1fr) var(--row-date) var(--row-cited) var(--row-chevron);
   }
   .citator-row--head {
     @apply items-center rounded-t-2xl border border-greyscale-200 bg-greyscale-50 py-2 text-[0.625rem] font-semibold uppercase tracking-wide text-greyscale-500;
@@ -839,18 +877,17 @@
   .citator-row__cited {
     @apply pt-0.5 text-xs tabular-nums text-greyscale-600;
   }
-  /* the applied pill first, then the recognized pills, stacked */
+  /* the treatment line: the applied pill first, then the recognized
+     pills, across the whole row so every label reads in full */
   .citator-row__treatment {
-    @apply flex flex-col items-start gap-y-1 pt-0.5;
+    @apply flex flex-wrap items-center gap-x-1.5 gap-y-1;
+    grid-column: 1 / -1;
   }
   .citator-row__treatment > span {
     @apply inline-flex max-w-full items-center gap-x-1.5;
   }
-  .citator-row__treatment .severity-badge {
-    @apply max-w-[11rem] justify-start;
-  }
   .citator-row__name {
-    @apply min-w-0 pt-0.5 text-sm;
+    @apply min-w-0 text-sm;
   }
   /* the case name: a link when the preview has the opinion's page, plain
      text otherwise, so only the link gets a hover */
@@ -861,7 +898,11 @@
     @apply font-semibold text-greyscale-900 hover:text-primary-700 hover:underline;
   }
   .citator-row__meta {
-    @apply m-0 mt-0.5 text-xs text-greyscale-600;
+    @apply m-0 text-xs text-greyscale-600;
+  }
+  /* the case number list sits inline with the court and status */
+  .citator-row__meta-item {
+    @apply inline-flex items-baseline gap-x-1;
   }
   .citator-row__chevron {
     @apply mt-1 h-4 w-4 text-greyscale-400;
@@ -901,20 +942,8 @@
   .cited-authority:last-child > details[open] > summary {
     @apply rounded-b-none;
   }
-  /* rows share a minimum height: title, subtitle and two meta rows */
   .cited-authority__body {
     @apply min-w-0;
-    min-height: 5.75rem;
-  }
-  .cited-authority__meta {
-    @apply mt-1.5 grid gap-x-3 gap-y-0.5 text-xs;
-    grid-template-columns: 6.5rem minmax(0, 1fr);
-  }
-  .cited-authority__meta dt {
-    @apply whitespace-nowrap text-greyscale-500;
-  }
-  .cited-authority__meta dd {
-    @apply m-0 min-w-0 leading-relaxed text-greyscale-700;
   }
   /* a filtered-out row: a class, not x-show, because the row also binds a
      style for sorting and Alpine's style bookkeeping would undo x-show */
@@ -981,6 +1010,10 @@
   }
   .evidence-card__quote-text {
     @apply m-0 text-[0.8125rem] italic leading-relaxed text-greyscale-800;
+  }
+  /* the case the passage cites or names, so it stands out of a long quote */
+  .evidence-card__case {
+    @apply font-semibold text-greyscale-900;
   }
   .evidence-card__link {
     @apply mt-2 inline-flex items-center gap-1 rounded text-xs font-semibold not-italic text-primary-700 no-underline hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300;
@@ -1062,8 +1095,8 @@
   }
   /* the elbow in the connector row: a stub up out of the previous
      decision's column, a rail across to this court's column, a stub up
-     into this card with the arrowhead. The insets put the stubs on the
-     end columns' centres. */
+     into this card. The insets put the stubs on the end columns'
+     centres. */
   .history-move {
     @apply relative;
   }
@@ -1084,11 +1117,6 @@
   }
   .history-move__stub--to {
     @apply top-0 h-1/2;
-  }
-  .history-move__stub--to::after {
-    content: "";
-    @apply absolute left-1/2 top-0 block h-0 w-0 -translate-x-1/2 border-x-4 border-b-[6px] border-x-transparent;
-    border-bottom-color: theme('colors.greyscale.400');
   }
   /* an appeal moves right (to a higher court); a remand comes back left;
      a court deciding again stays in its column */
@@ -1199,7 +1227,7 @@
     @apply font-semibold text-greyscale-900;
   }
   .stat-grid {
-    @apply mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4;
+    @apply mt-6 grid gap-4 sm:grid-cols-2;
   }
   .stat-card {
     @apply rounded-lg border border-greyscale-200 px-4 py-3;
@@ -1219,7 +1247,8 @@
   .about-card {
     @apply rounded-md border border-greyscale-200 px-4 py-3 text-sm text-greyscale-700;
   }
-  .about-card strong {
+  /* the card's title only: a bold name inside the text stays inline */
+  .about-card > strong {
     @apply block text-greyscale-900;
   }
   .about-card span {

@@ -1,4 +1,4 @@
-{# Cited By tab: one row per later opinion that cites this one, with what
+{# Later Courts tab: one row per later opinion that cites this one, with what
    it did itself and what it reports other courts did. Reads
    `opinion.cited_by` (sorted severity then date), `opinion.cited_by_populated`,
    `opinion.cited_by_scope` ("controlling" = every citing opinion from a
@@ -38,17 +38,17 @@
   <p class="tab-empty">Citing opinions have not been collected for this opinion yet.</p>
   {% else %}
   {{ listToolbar([
-    {"key": "severity", "label": "Severity, most severe first"},
-    {"key": "name", "label": "Alphabetical, A to Z"},
-    {"key": "recency", "label": "Date filed, newest first"},
-    {"key": "mentions", "label": "Times cited, most first"}
+    {"key": "severity", "label": "Severity"},
+    {"key": "name", "label": "Case Name"},
+    {"key": "recency", "label": "Newest First"},
+    {"key": "mentions", "label": "Depth of Treatment"},
+    {"key": "court", "label": "Court Authority"}
   ], "citing opinions", "Applied treatment", "Recognized treatment", flags.validation) }}
   {{ listHeader([
-    {"label": "Treatment", "title": "What the citing opinion does to this case, then what it recognizes other courts did"},
-    {"label": "Citing opinion", "title": "The citing opinion, by name"},
-    {"label": "Date", "class": "col-head--pad", "title": "When the citing opinion was decided"},
-    {"label": "Cites", "class": "col-head--pad", "title": "How often the citing opinion cites this case"}
-  ], flags.validation) }}
+    {"label": "Citing opinion", "title": "The citing opinion, under what it does to this case and what it recognizes other courts did"},
+    {"label": "Date filed", "class": "col-head--pad", "title": "When the citing opinion was decided"},
+    {"label": "Depth", "class": "col-head--pad", "title": "How many times the citing opinion cites this case"}
+  ]) }}
   <ul role="list" class="citator-list">
     {% for cb in opinion.cited_by %}
     <li
@@ -62,12 +62,13 @@
       data-name-index="{{ cb.name_index }}"
       data-severity-index="{{ cb.severity_index }}"
       data-mentions-index="{{ cb.mentions_index }}"
+      data-court-index="{{ cb.court_index }}"
       x-bind:class="rowClass"
       x-bind:style="rowStyle"
       class="cited-authority sev-rail sev-rail--{{ cb.severity | lower }}"
     >
       {% if cb.has_detail %}<details class="authority-row"><summary class="authority-row__summary">{% else %}<div>{% endif %}
-        <div class="citator-row{% if flags.validation %} citator-row--validation{% endif %}">
+        <div class="citator-row">
           <div class="citator-row__treatment">
             {% for p in cb.applied %}
             <span>
@@ -92,19 +93,13 @@
               {% endif %}
 
             </div>
-            <p class="citator-row__meta">{{ cb.citing_court_display }}</p>
-            {% if cb.citing_docket_numbers | length or cb.citing_citations | length %}
-            <dl class="cited-authority__meta">
-              {% if cb.citing_docket_numbers | length %}
-              <dt>Docket Number</dt>
-              <dd>{{ citeList(cb.citing_docket_numbers, noun="docket number") }}</dd>
-              {% endif %}
-              {% if cb.citing_citations | length %}
-              <dt>Citations</dt>
-              <dd>{{ citeList(cb.citing_citations) }}</dd>
-              {% endif %}
-            </dl>
-            {% endif %}
+            {# court, case number and citations on one line, as the
+               Authorities rows lay theirs out #}
+            <p class="citator-row__meta">
+              {{ cb.citing_court_display }}
+              {%- if cb.citing_docket_numbers | length %} <span class="cite-list__dot" aria-hidden="true">·</span> <span class="citator-row__meta-item" data-cite-cell>No. {{ citeList(cb.citing_docket_numbers, noun="case number") }}</span>{% endif -%}
+              {%- if cb.citing_citations | length %} <span class="cite-list__dot" aria-hidden="true">·</span> <span class="citator-row__meta-item" data-cite-cell>{{ citeList(cb.citing_citations, dot=true) }}</span>{% endif -%}
+            </p>
           </div>
           <div class="citator-row__date">{{ cb.citing_date_short }}</div>
           <div class="citator-row__cited" title="{{ cb.citing_n_mentions }} mention{% if cb.citing_n_mentions != 1 %}s{% endif %} of this case">{{ cb.citing_n_mentions or "" }}</div>

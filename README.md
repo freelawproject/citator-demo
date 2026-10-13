@@ -65,11 +65,11 @@ _includes/
   macros/               reusable Nunjucks macros
     icons.njk           inline SVG icons
     treatment.njk       severity pill, validation mark
-    status.njk          Disposition / On appeal / Later courts rows
+    status.njk          Later courts / On appeal / Disposition rows
     evidence.njk        evidence card (pill, rationale, quote, link)
     lists.njk           clamped citation list with "+N"
     list_header.njk     sort menu, treatment filter, column labels
-  partials/             the opinion page's tabs and the Back control
+  partials/             the opinion page's tabs
 src/                    pages: index, opinion, about
 assets/
   css/styles.css        Tailwind input
@@ -77,7 +77,7 @@ assets/
                         instead of adding one
   js/cite_fit.js        fits each clamped citation list to one line
   js/alpine/components/ one component per page or list, plus the
-                        Back control and the first-visit About hint
+                        first-visit About hint
   js/alpine/composables/ shared Alpine behaviour (list toggle, highlight)
 scripts/
   build_data.py         entry point: data source → _data/*.json
@@ -109,26 +109,29 @@ one opinion in the collection has it. Every group resolved to an opinion
 in the collection is one edge from the citing opinion to the cited
 opinion. The Authorities tab is the edges
 where an opinion is the citing side, in the active voice
-("Distinguishing"); the Cited By tab, the status rows and the home cards
+("Distinguishes"); the Later Courts tab, the status rows and the home cards
 are the edges where it is the cited side, in the passive ("Distinguished
 by"); the mention count is the same number on both. A treatment a citing
 opinion only reports another court applying is the "as recognized by"
-form and keeps that treatment's severity. The Cited By tab lists one row
+form and keeps that treatment's severity. The Later Courts tab lists one row
 per citing opinion, however many treatments run between the two. On
 both tabs every treatment other than a plain "Cited by", applied or
-recognized, gets an evidence card with its rationale and quote; the
-rule and the card are shared (`taxonomy.has_evidence`,
+recognized, gets an evidence card with its rationale and quote, the
+case's citation or name in bold where the quote has it
+(`model_output.mark_case_in_quote`); the rule and the card are shared (`taxonomy.has_evidence`,
 `macros/evidence.njk`). The citing-scope CSVs say which citing opinions
 were fetched for each anchor; they create no rows.
 
 Treatments roll up into four severity tiers, most serious first: Stop,
-Warning, Caution and Neutral (an affirmance is Neutral). The first three
+Warning, Caution and Neutral (an affirmance is Neutral). The tier is the
+taxonomy's (`scripts/taxonomy.py`), not the one recorded in the data
+source, so a tier change reaches every page on the next build. The first three
 are the negative tiers; only they produce text markers and
 expert-disagreement marks (`scripts/taxonomy.py`). An opinion's own
 disposition renders in the active voice, what this opinion did
-("Affirming"), as does every card on the History tab (what that decision
-did); one the taxonomy has no label for renders as "Ordered" on both
-and opens the sentence that disposed of the case.
+("Affirms"), always in the neutral grey, as does every card on the
+History tab (what that decision did, in its own severity); one the taxonomy has no label for shows the sentence that
+disposed of the case on both, as plain text in place of a pill.
 
 `scripts/real_data.py` reads `data-source/`:
 
@@ -140,7 +143,7 @@ and opens the sentence that disposed of the case.
 | `citation_groups/{cluster_id}.json` | Citation extraction output: the writings' html, one group per cited case (`gid`, `n`, `name`, `cited_cluster_id`, `citations`, `cited_as`, `n_mentions`), kept and removed spans (`occurrences`), added mentions (`manual`). The group number `n` is the key the treatments use. |
 | `treatments/{cluster_id}.json` | Per group: `applied`, `severity`, `direction`, `quote`, `rationale`, `recognized[]`; plus the opinion's `disposition`, `on_appeal` and expert `gold`. |
 | `cited_metadata.json` | Date, status, court and citations for cited clusters. |
-| `citing_counts_*.json` | How often cited opinions are cited, for pages outside the Cited By scope. |
+| `citing_counts_*.json` | How often cited opinions are cited, for pages outside the Later Courts scope. |
 | `citing_edges.csv`, `citing_edges_round2.csv` | The citing scope: which citing opinions were fetched for which anchor (`citing_cluster_id`, and `anchor_opinion_id` or `anchor_cluster_id`). |
 
 An opinion payload holds `cluster_id`, `case_name`, `docket_number`,
@@ -162,17 +165,34 @@ page it is on, where the opinion shown is always "this case").
 - **Home** lists every opinion, newest first, with search by name or
   citation, a court picker, "Anchor opinions only" (on by default) and
   severity toggles for each of the two status questions a card answers
-  (on appeal, later courts); ticked severities are a union. Filter state
+  (later courts, on appeal); ticked severities are a union. Filter state
   lives in the URL. A card shows On appeal and Later courts only when
   there is something to report; the opinion page shows every status row,
-  counting Later courts to zero, and adds the Disposition row. Citation
-  and docket lists show up to three entries, as many as fit on one line
+  counting Later courts to zero, and adds the Disposition row. The Later
+  courts row leads with the most negative treatment from a controlling
+  or equal court if there is one, else the most negative of all
+  (`courts.court_relation`, `build_data._later_lead`),
+  and names the court that did it (the case is the hover title and the
+  link); the counts beside it open the Later Courts tab. A count says
+  what it covers, every citing opinion
+  from a controlling or equal court (the anchors) or the opinions in this
+  preview. Dates are stored as YYYY-MM-DD and shown as MM/DD/YYYY
+  (`usdate` in `.eleventy.js`; the tab rows' columns through
+  `data_source.short_date`). Citation
+  and case number lists show up to three entries, as many as fit on one line
   (`assets/js/cite_fit.js`), and fold the rest behind "+N".
 - **Opinion** shows the case card and status rows, then four tabs:
-  Opinion (the text, every citation linked to its Authorities row, with
-  a marker for a negative treatment), Authorities and Cited By (each with
-  search by name or citation, a sort menu and a severity filter over the
-  applied and recognized treatments, as a union) and History (the case's
+  Opinion (the text; every citation shows its case name on hover and,
+  for a negative treatment, the tier's icon with the tier as its tooltip;
+  a click opens the occurrence navigator, `opinion_tabs.js`: the most
+  serious treatment's pill and rationale from the case's Authorities row,
+  the case name, Previous and Next through the mentions, a link to the
+  Authorities row, Escape or a click elsewhere to close), Authorities and
+  Later Courts (each with
+  search by name or citation, a sort menu, including by court authority,
+  the courts that bind first then the higher court, and a severity
+  filter over the applied and recognized treatments, as a union) and
+  History (the case's
   route through the courts: court levels along the bottom, time up the
   side).
 - **About** explains the preview and the taxonomy, then ends with a
@@ -183,9 +203,8 @@ Every page carries a desktop notice below the header on small screens,
 and the header's About link shows a one-time hint until it is followed,
 dismissed, or the About page is opened (remembered in localStorage).
 On an opinion page, changing tab adds a history entry and a jump within
-a tab replaces it, so the browser's Back button and the site's Back
-control both step back through the tabs visited and then to the
-previous page, on the tab it was left on.
+a tab replaces it, so the browser's Back button steps back through the
+tabs visited and then to the previous page, on the tab it was left on.
 
 ## Continuous integration
 

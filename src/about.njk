@@ -15,8 +15,13 @@ permalink: /about/
   <header class="mb-10">
     <h1 class="text-display-sm font-semibold text-greyscale-900 leading-tight">About this citator</h1>
     <p class="mt-3 text-md text-greyscale-700 leading-relaxed">
-      A preview of an AI-powered citator from
+      A preview of a new
+      <a href="https://github.com/freelawproject" class="links" target="_blank" rel="noopener">open-source</a>
+      citator from
       <a href="https://free.law/" class="links" target="_blank" rel="noopener">Free Law Project</a>.
+      The citator reads each opinion with care and, for every treatment, shows the passage behind it and the reasoning that led to it, so you can weigh a treatment at a glance.
+    </p>
+    <p class="mt-4 text-md text-greyscale-700 leading-relaxed">
       This page explains what the preview covers, how to read it, and
       <a href="#feedback" class="links">where your feedback helps most</a>.
     </p>
@@ -26,12 +31,12 @@ permalink: /about/
   </header>
 
   <section class="about-section">
-    <h2>What this is</h2>
+    <h2>What is a citator</h2>
     <p>
       A citator surfaces how a court opinion has been treated by other opinions — reversed, overruled, criticized, distinguished, or simply cited. A citator is used to determine whether a case is still good law before relying on it.
     </p>
     <p class="font-semibold text-greyscale-900">
-      This demo previews the AI-powered citator that Free Law Project will integrate into
+      This demo previews the open-source citator that Free Law Project will integrate into
       <a href="https://www.courtlistener.com/" class="links" target="_blank" rel="noopener">CourtListener</a>.
     </p>
   </section>
@@ -39,28 +44,18 @@ permalink: /about/
   <section class="about-section">
     <h2>What's in this preview</h2>
     <p>
-      The preview is built around <strong>{{ scope.anchors }} anchor opinions</strong>, chosen to span the court system — from the Supreme Court of the United States down to a state surrogate's court, and from {{ scope.anchor_earliest_year }} to {{ scope.anchor_latest_year }}. Around each anchor sit the cases it cites and the cases that cite it.
+      The preview is built around {{ scope.anchors }} anchor opinions, spanning the court systems — from the Supreme Court of the United States down to a state surrogate's court, and from {{ scope.anchor_earliest_year }} to {{ scope.anchor_latest_year }}. Around each anchor sit the cases it cites and the cases that cite it.
     </p>
     <dl class="stat-grid">
       <div class="stat-card">
         <dt>Opinions</dt>
         <dd class="stat-card__value">{{ scope.opinions_display }}</dd>
-        <dd class="stat-card__note">{{ scope.anchors }} anchors, {{ scope.authorities_display }} cases they cite, and {{ scope.citing_display }} later opinions that cite an anchor. Those citing opinions come only from courts whose decisions <strong>control or equal</strong> the anchor’s own.</dd>
+        <dd class="stat-card__note">{{ scope.anchors }} anchors, {{ scope.authorities_display }} cases they cite, and {{ scope.citing_display }} later opinions that cite an anchor. Only citing opinions that come from courts whose decisions control or equal the anchor are presented.</dd>
       </div>
       <div class="stat-card">
         <dt>Courts</dt>
         <dd class="stat-card__value">{{ scope.courts }}</dd>
         <dd class="stat-card__note">Federal and state, trial through courts of last resort.</dd>
-      </div>
-      <div class="stat-card">
-        <dt>Authority references</dt>
-        <dd class="stat-card__value">{{ scope.authority_rows_display }}</dd>
-        <dd class="stat-card__note">Every case cited inside an opinion here, counted once per opinion citing it — what fills the Authorities tabs.</dd>
-      </div>
-      <div class="stat-card">
-        <dt>Citing references</dt>
-        <dd class="stat-card__value">{{ scope.citing_rows_display }}</dd>
-        <dd class="stat-card__note">Times one opinion here cites another — what fills the Cited By tabs. {{ scope.citing_rows_at_anchor_display }} of them point at an anchor; the rest point at the other cases in the preview.</dd>
       </div>
     </dl>
   </section>
@@ -70,36 +65,24 @@ permalink: /about/
 
     <h3>The opinion list</h3>
     <p>
-      The home page lists every opinion in the preview, newest first. Search by case name <em>or</em> by citation. Filter by court through the court picker, or by severity: a list of four toggles, most severe at the top, for each of what happened to the case on appeal and how later courts have treated it. Selecting several shows every opinion that matches any of them. <strong>Anchor opinions only</strong> starts switched on, which narrows the list to the ten cases the preview is built around — clear it to browse everything.
-    </p>
-    <p>
-      Each card carries up to two Citator classes: <strong>On appeal</strong>, what happened to the case as it moved through the courts; and <strong>Later courts</strong>, how later cases have treated it. A class appears only when there is something to report; the opinion page shows every class, counting Later courts to zero when nothing cites the case, and adds a third, <strong>Disposition</strong>: what the court decided (<em>Affirming</em>, <em>Reversing and remanding</em>, or <em>Ordered</em> when the order is none of the named kinds, which opens the sentence that disposed of the case). Where a card shows a treatment, clicking it opens the citing opinion at its entry for this case.
+      The home page lists every opinion in the preview, newest first. Search by case name <em>or</em> by citation. Filter by court through the court picker, or by severity. <strong>Anchor opinions only</strong> is switched on by default, which narrows the list to the {{ scope.anchors }} anchor opinions the preview is built around — clear it to browse everything.
     </p>
 
     <h3>The opinion page</h3>
-    <p>Four tabs, each answering a different question.</p>
-    <div class="about-cards">
-      <div class="about-card">
-        <strong>Opinion</strong>
-        <span>The full text. Every case the opinion cites is tinted; a case with a negative treatment also carries a small dot in the colour of its most serious treatment. Click a citation and a navigator opens: step through every place that case is mentioned, open its opinion when the preview has it, or jump straight to its entry under Authorities.</span>
-      </div>
-      <div class="about-card">
-        <strong>Authorities</strong>
-        <span>Every case cited in the opinion: its name and citations, court, docket number and date, how often this opinion cites it, what this opinion does to it and what it recognizes other courts did. Ordered by how serious the treatment is; search it by name or citation, change the order, and filter by the severity of the applied treatment, of the recognized treatments, or both. Selecting several severities shows every entry that matches any of them.</span>
-      </div>
-      <div class="about-card">
-        <strong>Cited By</strong>
-        <span>Every later opinion that cites this one: its name and citations, court, docket number and date, how often it cites this case, what it does to this opinion and what it recognizes other courts did. Ordered by how serious the treatment is; search it by name or citation, change the order, and filter by the severity of the applied treatment, of the recognized treatments, or both. Selecting several severities shows every entry that matches any of them. For the anchors the list is every citing opinion from a controlling or equal court; for every other opinion it is the opinions in this preview that cite it.</span>
-      </div>
-      <div class="about-card">
-        <strong>History</strong>
-        <span>The case's route through the court system, drawn on two axes: courts along the bottom, lowest on the left and highest on the right, and time up the side, oldest at the bottom and newest at the top. An appeal moves up and to the right; a remand comes back to the left. Each card says what that court did, as that court did it (<em>Reversing</em>, <em>Affirming in part; Vacating in part</em>, or <em>Ordered</em>, which opens the court's own sentence); the path shows which decision it acted on. The highlighted card is the opinion you are reading, and a card's details open on request.</span>
-      </div>
-    </div>
+    <p>The opinion page presents four tabs.</p>
+    <ul class="about-list">
+      <li><strong>Opinion</strong> — the opinion's text, with its citations and each citation's treatment signals marked.</li>
+      <li><strong>Authorities</strong> — every case the opinion cites, with the most negative treatments first.</li>
+      <li><strong>Later Courts</strong> — every later opinion that cites the opinion, with the most severe treatments first.</li>
+      <li><strong>History</strong> — the case's route through the court systems.</li>
+    </ul>
 
-    <h3>Reading the treatment evidence</h3>
+    <h3>Treatment evidence on the Authorities and Later Courts tabs</h3>
     <p>
-      Any entry with a treatment other than <em>Cited by</em> expands. Inside is one card per such treatment, in the same order as the pills on the entry: the treatment the citing court applied first, then the treatments it recognizes. Each card gives the treatment, the reasoning, and the passage from the citing opinion that supports it, with two checks under the passage: whether it was found in the text, and whether it names the case. <strong>Read in the opinion</strong> takes you to that passage in context; on Cited By, <strong>See it in the citing opinion</strong> opens the citing opinion at its entry for this case.
+      Any entry with a treatment other than <em>Cited by</em> expands into a card. Each card provides the treatment, the reasoning behind it, and the supporting passage from the citing opinion. The card's link, <strong>Read in the opinion</strong> or <strong>See it in the citing opinion</strong>, takes you to the supporting passage in context.
+    </p>
+    <p>
+      The citator is automated, and every passage it provides is checked against the opinion's own text.
     </p>
   </section>
 
@@ -119,40 +102,24 @@ permalink: /about/
       <dd>Stands; the citation is informational or procedural, or the case was affirmed on appeal.</dd>
     </dl>
 
-    <h3>Disposition, On appeal and Later courts</h3>
+    <h3>Later courts, On appeal and Disposition</h3>
     <p>
-      For every opinion the citator identifies what the court itself decided, what then happened to the case, and how later cases have treated it. The three answer different questions and should not be read as one signal.
+      For every opinion, the citator identifies how later cases have treated it (<strong>Later courts</strong>), what then happened to the case on appeal (<strong>On appeal</strong>), and what the court itself decided (<strong>Disposition</strong>). <strong>Disposition</strong> is always presented as <em>Neutral</em> because it is informational only: whether a case is still good law is determined by how it was treated on appeal (<strong>On appeal</strong>) and how later controlling or equal courts treated it (<strong>Later courts</strong>).
     </p>
-    <ul class="about-list">
-      <li><strong>Disposition</strong> — what this opinion did with the case in front of it: affirming, reversing, vacating, remanding, or a mix. An order that is none of those, such as a motion decided or a petition dismissed, shows as <em>Ordered</em>, and opens the sentence that disposed of the case, on the status row and on the History tab alike.</li>
-      <li><strong>On appeal</strong> — what happened to this case afterwards, as it moved further through the courts. Was this decision itself affirmed, reversed, vacated, or remanded? The citator works this out from the later opinions that cite this one, counting what a later opinion reports another court did to this case, so a step can only appear where a later opinion cites or names this case.</li>
-      <li><strong>Later courts</strong> — what later, unrelated cases said about the rule the case established. Did they follow it, distinguish it, criticize it, or overrule it? This is the signal for whether the case is still good law in practice. For the anchors the count covers every citing opinion from a controlling court; for every other case it covers the opinions in this preview, so <em>Cited by 0 opinions in this collection</em> means none of them cites it, not that nothing does.</li>
-    </ul>
+    <p>
+      The <strong>Later courts</strong> row, on the opinion page and on the home page cards, leads with the most negative treatment from a court that controls the case's court or sits at its level; only when no such court has treated the case negatively does it fall back to the most negative treatment from any court, and it names the court that did it. The <strong>Later Courts</strong> tab, however, lists every citing opinion and sorts by severity alone, whatever the court, so its first entry can be a more severe treatment from a court whose decisions do not bind.
+    </p>
 
     <h3>Other things to notice</h3>
     <div class="about-cards">
       <div class="about-card">
         <strong>Both sides of the same treatment</strong>
-        <span>A citation is recorded once and shown from both ends: it appears under <em>Authorities</em> on the opinion that applied it, and under <em>Cited By</em> on the opinion it was applied to, with the same treatment, severity, supporting passage and citation count. The two tabs are the two sides of one table, so they can never disagree.</span>
+        <span>A citation is presented from both perspectives: it appears under <strong>Authorities</strong> on the opinion that applied it, and under <strong>Later Courts</strong> on the opinion it was applied to, with the same treatment, severity, supporting passage and citation count.</span>
       </div>
       <div class="about-card">
         <strong>What a court reports, versus what it does</strong>
-        <span>Under the citing court's own treatment, a pill reading <em>Recognizing to be…</em> on Authorities — <em>… as recognized by</em> on Cited By — is a treatment the court is not applying itself, but reporting: how another court has already treated the case.</span>
+        <span>Under the citing court's own treatment, a pill reading <em>Recognizes to be…</em> on <strong>Authorities</strong> — <em>… as recognized by</em> on <strong>Later Courts</strong> — is a treatment the court is reporting rather than applying.</span>
       </div>
-      <div class="about-card">
-        <strong>Every treatment shows its evidence</strong>
-        <span>Every treatment carries the passage from the citing opinion behind it, so you can read the court’s own words and judge the call for yourself.</span>
-      </div>
-      <div class="about-card">
-        <strong>The stripe on an entry</strong>
-        <span>Each entry on <em>Authorities</em> and <em>Cited By</em> carries a coloured stripe down its left edge showing the most serious treatment it holds — the court's own, or one it reports. An entry can read <em>Cited by</em> and still carry a red stripe, because another court’s overruling of the case was recognized. Sorting by severity orders by that most serious treatment, as applied or as recognized by the citing case.</span>
-      </div>
-      {% if flags.validation %}
-      <div class="about-card">
-        <strong>Editorial validation marks</strong>
-        <span>Three icons next to each treatment indicate whether the classification has been validated against an expert's classification — Validated, Invalidated, or Unvalidated.</span>
-      </div>
-      {% endif %}
     </div>
 
     <details class="treatment-expand">
@@ -161,12 +128,12 @@ permalink: /about/
         <span>See the full treatment list</span>
       </summary>
       <p class="mt-3 text-sm text-greyscale-600 leading-relaxed">
-        Hover over or focus any treatment, here or anywhere on the site, for its definition. Each definition is written from the page you are on: <em>this case</em> is the opinion you are looking at, whether it applied the treatment or received it. The definitions below read as if this case received the treatment.
+        Hover over any treatment for its definition. Each definition is written from the page you are on: <em>this case</em> is the opinion you are looking at, whether it applied the treatment or received it. The definitions below read as if this case received the treatment.
       </p>
       <div class="table-wrap">
         <table class="about-table">
           <thead>
-            <tr><th class="w-1/5">Severity</th><th class="w-2/5">Disposition / On Appeal</th><th class="w-2/5">Later courts</th></tr>
+            <tr><th class="w-1/5">Severity</th><th class="w-2/5">On appeal</th><th class="w-2/5">Later courts</th></tr>
           </thead>
           <tbody>
             {% for row in treatments %}
@@ -180,7 +147,7 @@ permalink: /about/
         </table>
       </div>
       <p>
-        Each negative treatment also has an "as recognized by" form (e.g., <em>Limited as recognized by</em>) — used when the citing court isn't doing the action itself, but is acknowledging that some other case has. It keeps the same severity tier as the underlying treatment, and sits under the court's own treatment in the Treatment column.
+        Each negative treatment also has an <em>as recognized by</em> form (e.g., <em>Limited as recognized by</em>) — used when the citing court isn't doing the action itself, but is acknowledging that some other case has. It keeps the same severity tier as the underlying treatment.
       </p>
     </details>
   </section>
@@ -233,7 +200,7 @@ permalink: /about/
           </tr>
           <tr>
             <td class="font-semibold text-greyscale-900">Filters</td>
-            <td>Court and severity on the opinion list; search by name or citation, sorting and a severity filter over applied and recognized treatments on the Authorities and Cited By tabs.</td>
+            <td>Court and severity on the opinion list; search by name or citation, sorting and a severity filter over applied and recognized treatments on the <strong>Authorities</strong> and <strong>Later Courts</strong> tabs.</td>
             <td>All existing CourtListener filters, plus citator severity and treatment filters.</td>
           </tr>
         </tbody>

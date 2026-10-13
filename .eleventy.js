@@ -15,6 +15,13 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy({
     "node_modules/@alpinejs/csp/dist/cdn.min.js": "assets/js/alpine.min.js",
   });
+  // Dates are kept as YYYY-MM-DD in the data (they sort as text) and
+  // shown as MM/DD/YYYY: this filter for the pages' own dates, and
+  // data_source.short_date for the tab rows' columns.
+  eleventyConfig.addFilter("usdate", (iso) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
+    return m ? `${m[2]}/${m[3]}/${m[1]}` : iso || "";
+  });
 
   return {
     dir: {

@@ -6,7 +6,7 @@
    from the decision before; `levels` names the court columns. Grid placement is
    passed to the stylesheet as custom properties. The cards are emitted
    newest first, so the narrow-screen single column reads top-down too. #}
-{% from "macros/status.njk" import dispositionBadge %}
+{% from "macros/status.njk" import dispositionLabel %}
 {% from "macros/icons.njk" import icon %}
 
 {% set history = opinion.appellate_history %}
@@ -44,8 +44,8 @@
           Details
         </summary>
         <dl class="meta-list meta-list--compact">
-          {% if step.date_filed %}<div><dt>File Date</dt><dd>{{ step.date_filed | replace("-", "/") }}</dd></div>{% endif %}
-          {% if step.docket_number %}<div><dt>Docket Number</dt><dd>{{ step.docket_number }}</dd></div>{% endif %}
+          {% if step.date_filed %}<div><dt>Date filed</dt><dd>{{ step.date_filed | usdate }}</dd></div>{% endif %}
+          {% if step.docket_number %}<div><dt>Case Number</dt><dd>{{ step.docket_number }}</dd></div>{% endif %}
           {% if step.citations | length %}
           <div><dt>Citations</dt><dd>{% for c in step.citations %}{{ c }}{% if not loop.last %} <span class="cite-list__dot" aria-hidden="true">·</span> {% endif %}{% endfor %}</dd></div>
           {% endif %}
@@ -54,7 +54,7 @@
       {% endif %}
       {% for act in step.acts %}
       <div class="history-node__act">
-        {% for t in act.treatments %}{{ dispositionBadge(t.severity, t.treatment, t.text, treatment_definitions[t.defined_as]) }}{% endfor %}
+        {% for t in act.treatments %}{{ dispositionLabel(t.severity, t.treatment, t.text, treatment_definitions[t.defined_as]) }}{% endfor %}
       </div>
       {% endfor %}
       {% if step.role == "reported" %}
@@ -67,7 +67,7 @@
 
     {# the time axis: when this decision was made, beside its row #}
     <p class="history-time" style="--row: {{ step.row }}">
-      {%- if step.date_filed %}{{ step.date_filed | replace("-", "/") }}
+      {%- if step.date_filed %}{{ step.date_filed | usdate }}
       {%- if step.role == "reported" %} <span class="history-time__note">reported</span>{% endif %}
       {%- else %}<span class="history-time__note">undated</span>{% endif -%}
     </p>

@@ -45,13 +45,14 @@ scripts:
 
       <div class="filter-group">
         <span class="filter-group__title">Severity</span>
-        {# one list of toggles per question (what happened on appeal, how
-           later courts treat it), the two side by side, most severe at
-           the top, each naming its tier; the group names the question #}
+        {# one list of toggles per question (how later courts treat it,
+           what happened on appeal; the cards' order), the two side by
+           side, most severe at the top, each naming its tier; the group
+           names the question #}
         <div class="sev-groups">
         {% for direction in [
-          {"label": "On appeal", "prefix": "filterDh"},
-          {"label": "Later courts", "prefix": "filterCr"}
+          {"label": "Later courts", "prefix": "filterCr"},
+          {"label": "On appeal", "prefix": "filterDh"}
         ] %}
         <div class="sev-group" role="group" aria-label="{{ direction.label }} severity">
           <p class="sev-group__title">{{ direction.label }}</p>
@@ -105,14 +106,14 @@ scripts:
             </h3>
             <dl class="meta-list home-meta">
               <div><dt>Court</dt><dd>{{ case.court_display }}</dd></div>
-              <div><dt>File Date</dt><dd>{{ case.date_filed }}</dd></div>
-              {% if case.docket_numbers | length %}<div><dt>Docket Number</dt><dd>{{ citeList(case.docket_numbers, noun="docket number") }}</dd></div>{% endif %}
+              <div><dt>Date filed</dt><dd>{{ case.date_filed | usdate }}</dd></div>
+              {% if case.docket_numbers | length %}<div><dt>Case Number</dt><dd data-cite-cell>{{ citeList(case.docket_numbers, noun="case number") }}</dd></div>{% endif %}
               {% if case.citations | length %}
-              <div><dt>Citations</dt><dd>{{ citeList(case.citations, dot=true) }}</dd></div>
+              <div><dt>Citations</dt><dd data-cite-cell>{{ citeList(case.citations, dot=true) }}</dd></div>
               {% endif %}
             </dl>
           </div>
-          {{ statusRows(case.status, false, treatment_definitions, "", true) }}
+          {{ statusRows(case.status, false, treatment_definitions, "", true, "/opinion/" ~ case.cluster_id ~ "/#cited-by") }}
           {% if case.excerpt %}
           <p class="home-snippet">{{ case.excerpt }}</p>
           {% endif %}

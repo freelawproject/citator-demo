@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex">
-    <meta name="description" content="An AI-powered citator preview from Free Law Project. Surfaces how each opinion treats its cited cases and how subsequent opinions have treated it.">
+    <meta name="description" content="An open-source citator preview from Free Law Project. Every treatment is read from the opinions themselves and shown with the passage behind it.">
     <title>{{ title or "Citator Demo" }} — Free Law Project</title>
     <link rel="stylesheet" href="/assets/css/styles.css?v={{ build.stamp }}">
     {# Component scripts must precede alpine.min.js: the bundle calls
@@ -13,7 +13,6 @@
        after it never fires. #}
     <script defer src="/assets/js/alpine/composables/highlight.js?v={{ build.stamp }}"></script>
     <script defer src="/assets/js/alpine/composables/list_toggle.js?v={{ build.stamp }}"></script>
-    <script defer src="/assets/js/alpine/components/back_nav.js?v={{ build.stamp }}"></script>
     <script defer src="/assets/js/alpine/components/about_hint.js?v={{ build.stamp }}"></script>
     <script defer src="/assets/js/same_page_links.js?v={{ build.stamp }}"></script>
     <script defer src="/assets/js/cite_fit.js?v={{ build.stamp }}"></script>
@@ -58,17 +57,14 @@
     </p>
 
     <main id="main-content" class="capped-width px-4 md:px-10 py-6 flex-1">
-      {% if page.url != "/" and backNav != "inline" %}
-      {% include "partials/back-nav.njk" %}
-      {% endif %}
       {{ content | safe }}
     </main>
 
     <footer id="footer" class="site-footer">
       <div class="capped-width px-4 md:px-10 py-6 flex flex-wrap items-center gap-2">
-        <span>Generated {{ build.date }}</span>
+        <span>Generated {{ build.date | usdate }}</span>
         <span aria-hidden="true">·</span>
-        <span>AI-powered citator preview</span>
+        <span>Open-source citator preview</span>
         <span aria-hidden="true">·</span>
         <a href="/about/" class="links">About this citator</a>
         <span aria-hidden="true">·</span>

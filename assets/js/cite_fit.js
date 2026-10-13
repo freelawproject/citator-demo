@@ -1,19 +1,21 @@
 /*
-Fit each clamped citation list (macros/lists.njk) to one line. The macro
-marks up to `limit` entries as candidates and the rest `.cite-extra`;
-this script hides, from the end, every candidate that would overflow its
-<dd> or wrap to a second line, and sets the "+N" button to the number of
-entries now hidden. It runs when the page loads, when the fonts are
-ready, whenever a list's <dd> changes size (a resize, a tab or row being
-shown) and when a list is collapsed again.
+Fit each clamped citation list (macros/lists.njk) that sits in a block
+cell, a <dd data-cite-cell>, to one line. The macro marks up to `limit`
+entries as candidates and the rest `.cite-extra`; this script hides,
+from the end, every candidate that would overflow the cell or wrap to a
+second line, and sets the "+N" button to the number of entries now
+hidden. It runs when the page loads, when the fonts are ready, whenever
+a cell changes size (a resize, a tab or row being shown) and when a list
+is collapsed again. A list in an inline cell (the tab rows' detail line)
+is not fitted: it shows its first `limit` entries.
 
-Plain script, no Alpine. The expanded state (`.is-expanded` on the <dd>,
+Plain script, no Alpine. The expanded state (`.is-expanded` on the cell,
 set by composables/list_toggle.js) shows everything and is left alone.
 */
 const HIDDEN = 'cite-fit-hidden';
 
 function fitList(list) {
-  const cell = list.closest('dd');
+  const cell = list.closest('dd[data-cite-cell]');
   if (!cell || cell.classList.contains('is-expanded')) return;
   const items = Array.from(list.querySelectorAll('.cite-item'));
   const candidates = items.filter((i) => !i.classList.contains('cite-extra'));
@@ -59,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     const cells = new Set();
     document.querySelectorAll('[data-cite-fit]').forEach((list) => {
-      const cell = list.closest('dd');
+      const cell = list.closest('dd[data-cite-cell]');
       if (cell) cells.add(cell);
     });
     cells.forEach((cell) => observer.observe(cell));
